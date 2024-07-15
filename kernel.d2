@@ -1,0 +1,138 @@
+
+collectives\.cc: {
+    ncclSend
+}
+collectives\.cc.ncclSend -> group\.cc.ncclGroupStart: 2
+collectives\.cc.ncclSend -> group\.cc.ncclGroupEnd: 4
+
+# include/
+include: {
+    near: bottom-center
+
+    collectives\.h: {
+        ncclTypeSize.style.stroke: gray
+        ncclTypeSize.style.fill: gainsboro
+    }
+    collectives\.h.style.stroke: gray
+    collectives\.h.style.fill: gainsboro
+
+    utils\.h: {
+        ncclInstruQueueEmpty
+        ncclInstruQueueHead
+        ncclInstruQueueDequeue
+        ncclInstruQueueEnqueue
+    }
+
+    group\.h: {
+        ncclGroupCommLeave
+
+        ncclGroupErrorCheck.style.stroke: gray
+        ncclGroupErrorCheck.style.fill: gainsboro
+
+        ncclGroupStartInternal
+    }
+}
+collectives\.cc.ncclSend -> include.collectives\.h.ncclTypeSize: 1 {
+    style: {
+        stroke: gray
+    }
+}
+enqueue\.cc.ncclEnqueueCheck -> include.group\.h.ncclGroupErrorCheck: 6 {
+    style: {
+        stroke: gray
+    }
+}
+group\.cc.ncclGroupStart -> include.group\.h.ncclGroupStartInternal
+
+group\.cc.groupLaunch -> include.utils\.h.ncclInstruQueueEnqueue: 1
+group\.cc.groupLaunch -> include.group\.h.ncclGroupCommLeave: n + 1
+
+group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueEmpty: 1
+group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueHead: 2
+group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueDequeue: 4
+
+group\.cc: {
+    ncclGroupStart
+
+    groupCleanup.style.stroke: gray
+    groupCleanup.style.fill: gainsboro
+    ncclGroupEndInternal -> groupCleanup: fail {
+        style: {
+            stroke: gray
+            stroke-dash: 6
+        }
+    }
+    ncclGroupEnd -> ncclGroupEndInternal
+    ncclGroupEndInternal -> groupAsyncJobMain: 4 {
+        style: {
+            stroke-dash: 6
+        }
+    }
+    ncclGroupEndInternal -> groupLaunch: 2*
+    ncclGroupEndInternal -> groupResetJobState: 3*
+
+    groupAsyncJobMain -> groupLaunchNonBlocking
+    groupLaunchNonBlocking -> groupLaunch
+    groupLaunch -> groupCleanup: fail {
+        style: {
+            stroke: gray
+            stroke-dash: 6
+        }
+    }
+    groupLaunch -> asyncJobLaunch: 2
+    groupLaunch -> doLaunches: n
+    
+    asyncJobLaunch -> ncclAsyncJobMain: 3
+}
+group\.cc.ncclGroupEndInternal -> include.utils\.h.ncclInstruQueueEmpty: 1
+group\.cc.ncclGroupEndInternal -> include.utils\.h.ncclInstruQueueHead: 2
+
+enqueue\.cc: {
+    ncclEnqueueCheck -> taskAppend: 5
+}
+collectives\.cc.ncclSend -> enqueue\.cc.ncclEnqueueCheck: 3
+
+enqueue\.cc.ncclEnqueueCheck -> include.group\.h.ncclGroupStartInternal: 1
+enqueue\.cc.ncclEnqueueCheck -> group\.cc.ncclGroupEndInternal: 7
+
+init\.cc: {
+    ncclCommSetAsyncError
+    ncclCommGetAsyncError
+    
+    ncclCommEnsureReady.style.stroke: red
+    ncclCommEnsureReady.style.fill: mistyrose
+}
+
+enqueue\.cc.ncclEnqueueCheck -> init\.cc.ncclCommEnsureReady: 3
+enqueue\.cc.ncclEnqueueCheck -> init\.cc.ncclCommGetAsyncError: 7
+
+group\.cc.ncclGroupEndInternal -> init\.cc.ncclCommSetAsyncError: 3
+
+group\.cc.groupLaunch -> init\.cc.ncclCommSetAsyncError: n + 2
+
+group\.cc.asyncJobLaunch -> init\.cc.ncclCommSetAsyncError: 5
+
+# misc/
+misc: {
+    #near: center-right
+    argcheck\.cc: {
+        CommCheck.style.stroke: gray
+        CommCheck.style.fill: gainsboro
+
+        ArgsCheck.style.stroke: gray
+        ArgsCheck.style.fill: gainsboro
+    }
+    argcheck\.cc.style.stroke: gray
+    argcheck\.cc.style.fill: gainsboro
+}
+
+enqueue\.cc.ncclEnqueueCheck -> misc.argcheck\.cc.CommCheck: 2 {
+    style: {
+        stroke: gray
+    }
+}
+enqueue\.cc.ncclEnqueueCheck -> misc.argcheck\.cc.ArgsCheck: 4 {
+    style: {
+        stroke: gray
+    }
+}
