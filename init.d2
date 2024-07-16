@@ -1,6 +1,6 @@
 # src
 init\.cc: {
-    ncclCommInitRank -> ncclCommInitRankDev: 2
+    #ncclCommInitRank -> ncclCommInitRankDev: 2
     ncclGetUniqueId: {tooltip: When creating a communicator, the unique ID should be broadcast to all other MPI ranks.}
     ncclGetUniqueId: ncclGetUniqueId {
         link: 'https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/examples.html#example-2-one-device-per-process-or-thread'
@@ -199,7 +199,7 @@ misc: {
     }
 }
 
-init\.cc.ncclCommInitRank -> misc.cudawrap\.cc.ncclCudaLibraryInit: 1
+#init\.cc.ncclCommInitRank -> misc.cudawrap\.cc.ncclCudaLibraryInit: 1
 
 misc.cudawrap\.cc.initOnceFunc -> misc.param\.cc.ncclGetEnv: 1s
 
