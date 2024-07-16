@@ -1,0 +1,235 @@
+# src
+init\.cc: {
+    ncclCommInitRank -> ncclCommInitRankDev: 2
+    ncclGetUniqueId: {tooltip: When creating a communicator, the unique ID should be broadcast to all other MPI ranks.}
+    ncclGetUniqueId: ncclGetUniqueId {
+        link: 'https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/examples.html#example-2-one-device-per-process-or-thread'
+    }
+    ncclGetUniqueId -> ncclInit: 1
+    ncclGetUniqueId.style.stroke: green
+    ncclGetUniqueId.style.fill: palegreen
+    ncclInit: {tooltip: After this call, the bootstrap network is initialized.}
+
+    ncclInit -> initOnceFunc: pthread_once {
+        style: {
+            stroke-dash: 6
+        }
+    }
+    initGdrCopy: {tooltip: GDRCopy is "a low-latency GPU memory copy library based on NVIDIA GPUDirect RDMA technology." Temporarily ignored.}
+    initGdrCopy: initGdrCopy {
+        link: https://github.com/NVIDIA/gdrcopy
+    }
+    initOnceFunc -> initGdrCopy: 2
+    ncclGetUniqueId -> hashUniqueId: 4 {
+        style: {
+            stroke: gray
+        }
+    }
+    hashUniqueId.style.stroke: gray
+    hashUniqueId.style.fill: gainsboro
+}
+
+bootstrap\.cc:{
+    bootstrapNetInit: {tooltip: Initialize the bootstrap network by populating (global) `bootstrapNetIfName` array and `bootstrapNetIfAddr`. There are 2 networks. Bootstrap network, based on TCP, runs exactly once during initialization.}
+    bootstrapGetUniqueId: {tooltip: The unique ID is concatenation of some random number and a network address, either from a network specified by `NCCL_COMM_ID` or from the bootstrap network.}
+    bootstrapGetUniqueId -> bootstrapCreateRoot: 2.2*
+    bootstrapCreateRoot -> bootstrapRoot: 4 {
+        style: {
+            stroke-dash: 6
+        }
+    }
+    bootstrapRoot -> setFilesLimit: 1
+    setFilesLimit: {tooltip: Boost number of file descriptors to the maximum allowed by OS. This is common practice in network libraries.}
+    bootstrapRoot -> bootstrapNetRecv: 4
+}
+
+init\.cc.ncclGetUniqueId -> bootstrap\.cc.bootstrapGetUniqueId: 3
+init\.cc.initOnceFunc -> bootstrap\.cc.bootstrapNetInit: 3
+
+debug\.cc: {
+    ncclSetThreadName.style.stroke: gray
+    ncclSetThreadName.style.fill: gainsboro
+}
+debug\.cc.style.stroke: gray
+debug\.cc.style.fill: gainsboro
+
+bootstrap\.cc.bootstrapCreateRoot -> debug\.cc.ncclSetThreadName: 5 {
+    style: {
+        stroke: gray
+    }
+}
+init_nvtx\.cc: {
+    initNvtxRegisteredEnums: {tooltip: NVTX is an API for "annotating source code to provide contextual information to developer tools." Its calls do nothing by default. Temporarily ignored.}
+    initNvtxRegisteredEnums: initNvtxRegisteredEnums {
+        link: https://github.com/NVIDIA/NVTX
+    }
+}
+
+init\.cc.initOnceFunc -> init_nvtx\.cc.initNvtxRegisteredEnums: 4
+
+# include/
+include: {
+    alloc\.h: {
+        ncclCalloc -> ncclCallocDebug
+    }
+
+    gdrwrap\.h: gdrwrap.h {
+        link: https://github.com/NVIDIA/gdrcopy
+    }
+    gdrwrap\.h: {
+        ncclGdrInit.style.stroke: gray
+        ncclGdrInit.style.fill: gainsboro
+    }
+    gdrwrap\.h.style.stroke: gray
+    gdrwrap\.h.style.fill: gainsboro
+
+    nvtx3: nvtx3 {
+        link: https://github.com/NVIDIA/NVTX
+    }
+    nvtx3 {
+        nvtxDetail: {
+            nvtxExtImplPayload_v1\.h: {
+                nvtxPayloadEnumRegister.style.stroke: gray
+                nvtxPayloadEnumRegister.style.fill: gainsboro
+            }
+            nvtxExtImplPayload_v1\.h.style.stroke: gray
+            nvtxExtImplPayload_v1\.h.style.fill: gainsboro
+        }
+        nvtxDetail.style.stroke: gray
+        nvtxDetail.style.fill: gainsboro
+    }
+    nvtx3.style.stroke: gray
+    nvtx3.style.fill: gainsboro
+
+    utils\.h: {
+        getRandomData
+    }
+}
+
+init\.cc.initGdrCopy -> include.gdrwrap\.h.ncclGdrInit: {
+    style: {
+        stroke: gray
+    }
+}
+
+bootstrap\.cc.bootstrapGetUniqueId -> include.utils\.h.getRandomData: 2.1*
+
+bootstrap\.cc.bootstrapRoot -> include.alloc\.h.ncclCalloc: 1
+
+init_nvtx\.cc.initNvtxRegisteredEnums -> include.nvtx3.nvtxDetail.nvtxExtImplPayload_v1\.h.nvtxPayloadEnumRegister: {
+    style: {
+        stroke: gray
+    }
+}
+
+# misc/
+misc: {
+    param\.cc: {
+        initEnv: {tooltip: Set environment variables}
+        initEnv -> userHomeDir: 1
+        initEnv -> setEnvFile: 2
+        ncclGetEnv -> initEnv
+    }
+
+    socket\.cc: {
+        ncclSocketGetAddrFromString
+        ncclFindInterfaceMatchSubnet -> matchSubnet
+        matchSubnet: {tooltip: Check against user specified interfaces}
+
+        ncclFindInterfaces: {tooltip: Find all legal network interfaces, i.e., NICs. Prioritize IB. Docker and loopback interfaces are searched last.}
+        ncclFindInterfaces -> envSocketFamily: 1
+        envSocketFamily: {tooltip: The user may force socket family selection.}
+        ncclFindInterfaces -> findInterfaces: 2, 2.5*
+        ncclFindInterfaces -> ncclSocketGetAddrFromString: 2.3*
+        ncclFindInterfaces -> ncclFindInterfaceMatchSubnet: 2.4*
+        
+        findInterfaces: {tooltip: Filter network interfaces, i.e., NICs}
+        findInterfaces -> ncclSocketToString: 2 {
+            style: {
+                stroke: gray
+            }
+        }
+        ncclSocketInit -> ncclSocketToString
+        ncclSocketListen -> socketToPort
+        ncclSocketGetAddr
+    }
+
+    argcheck\.cc: {
+        PtrCheck.style.stroke: gray
+        PtrCheck.style.fill: gainsboro
+    }
+    argcheck\.cc.style.stroke: gray
+    argcheck\.cc.style.fill: gainsboro
+
+    utils\.cc: {
+        parseStringList: {tooltip: Parse a string representing a list of network interfaces}
+
+        matchIfList: {tooltip: Check against user-specified interfaces}
+        matchIfList -> matchIf: {
+            style: {
+                stroke: gray
+            }
+        }
+        matchIf.style.stroke: gray
+        matchIf.style.fill: gainsboro
+
+        matchIfList -> matchPort: {
+            style: {
+                stroke: gray
+            }
+        }
+        matchPort.style.stroke: gray
+        matchPort.style.fill: gainsboro
+    }
+
+    cudawrap\.cc: {
+        ncclCudaLibraryInit -> initOnceFunc: {
+            style: {
+                stroke-dash: 6
+            }
+        }
+
+        initOnceFunc -> cudaPfnFuncLoad: 2
+        cudaPfnFuncLoad: {tooltip: Load CUDA symbols}
+        initOnceFunc -> ncclIsCuMemSupported: 2
+        ncclIsCuMemSupported: {tooltip: cuMem driver API prevents potential deadlock and enables nulti-node NVLink.}
+        ncclIsCuMemSupported: ncclIsCuMemSupported {
+            link: https://github.com/NVIDIA/nccl/issues/1137
+        }
+    }
+}
+
+init\.cc.ncclCommInitRank -> misc.cudawrap\.cc.ncclCudaLibraryInit: 1
+
+misc.cudawrap\.cc.initOnceFunc -> misc.param\.cc.ncclGetEnv: 1s
+
+init\.cc.initOnceFunc -> misc.param\.cc.initEnv: 1
+
+bootstrap\.cc.bootstrapNetInit -> misc.param\.cc.ncclGetEnv: 1
+bootstrap\.cc.bootstrapNetInit -> misc.socket\.cc.ncclSocketGetAddrFromString: 2.1
+bootstrap\.cc.bootstrapNetInit -> misc.socket\.cc.ncclFindInterfaceMatchSubnet: 2.2
+bootstrap\.cc.bootstrapNetInit -> misc.socket\.cc.ncclFindInterfaces: 2*
+bootstrap\.cc.bootstrapNetInit -> misc.socket\.cc.ncclSocketToString: 3
+
+bootstrap\.cc.bootstrapGetUniqueId -> misc.param\.cc.ncclGetEnv: 1
+bootstrap\.cc.bootstrapGetUniqueId -> misc.socket\.cc.ncclSocketGetAddrFromString: 2
+bootstrap\.cc.bootstrapGetUniqueId -> misc.socket\.cc.ncclSocketGetAddrFromString: 2
+
+bootstrap\.cc.bootstrapCreateRoot -> misc.socket\.cc.ncclSocketInit: 1
+bootstrap\.cc.bootstrapCreateRoot -> misc.socket\.cc.ncclSocketListen: 2
+bootstrap\.cc.bootstrapCreateRoot -> misc.socket\.cc.ncclSocketGetAddr: 3
+
+bootstrap\.cc.bootstrapRoot -> misc.socket\.cc.ncclSocketInit: 2
+bootstrap\.cc.bootstrapRoot -> misc.socket\.cc.ncclSocketAccept: 3
+bootstrap\.cc.bootstrapRoot -> misc.socket\.cc.ncclSocketClose: 5
+
+misc.socket\.cc.ncclFindInterfaces -> misc.param\.cc.ncclGetEnv: 2.2*
+misc.socket\.cc.envSocketFamily -> misc.param\.cc.ncclGetEnv
+misc.socket\.cc.findInterfaces -> misc.utils\.cc.parseStringList: 1
+misc.socket\.cc.findInterfaces -> misc.utils\.cc.matchIfList: 3
+
+init\.cc.ncclGetUniqueId -> misc.argcheck\.cc.PtrCheck: 2 {
+    style: {
+        stroke: gray
+    }
+}
