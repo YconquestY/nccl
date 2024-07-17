@@ -1,20 +1,33 @@
 
 collectives\.cc: {
-    ncclSend
+    ncclSend/Recv: {tooltip: Blocking for GPU}
+    ncclSend/Recv: {
+        link: https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/api/p2p.html
+    }
+    ncclSend/Recv.style.stroke: green
+    ncclSend/Recv.style.fill: palegreen
 }
-collectives\.cc.ncclSend -> include.collectives\.h.ncclTypeSize: 1 {
+collectives\.cc.ncclSend/Recv -> include.collectives\.h.ncclTypeSize: 1 {
     style: {
         stroke: gray
     }
 }
-collectives\.cc.ncclSend -> group\.cc.ncclGroupStart: 2
-collectives\.cc.ncclSend -> group\.cc.ncclGroupEnd: 4
-collectives\.cc.ncclSend -> enqueue\.cc.ncclEnqueueCheck: 3
+collectives\.cc.ncclSend/Recv -> group\.cc.ncclGroupStart: 2
+collectives\.cc.ncclSend/Recv -> group\.cc.ncclGroupEnd: 4
+collectives\.cc.ncclSend/Recv -> enqueue\.cc.ncclEnqueueCheck: 3
 
 # include/
 include: {
     near: bottom-center
 
+    utils\.h: {
+        ncclInstruQueueEmpty
+        ncclInstruQueueHead
+        ncclInstruQueueDequeue
+        ncclInstruQueueEnqueue
+        ncclMemoryStackAlloc
+        ncclMemoryStackPush
+    }
     collectives\.h: {
         ncclTypeSize.style.stroke: gray
         ncclTypeSize.style.fill: gainsboro
@@ -22,22 +35,29 @@ include: {
     collectives\.h.style.stroke: gray
     collectives\.h.style.fill: gainsboro
 
-    utils\.h: {
-        ncclInstruQueueEmpty
-        ncclInstruQueueHead
-        ncclInstruQueueDequeue
-        ncclInstruQueueEnqueue
-    }
-
     group\.h: {
         ncclGroupCommLeave
+        ncclGroupCommJoin
 
         ncclGroupErrorCheck.style.stroke: gray
         ncclGroupErrorCheck.style.fill: gainsboro
 
         ncclGroupStartInternal: {tooltip: Increment per-thread `ncclGroupMode`}
+
+        ncclGroupCommPreconnect
+    }
+    channel\.h: {
+        ncclP2pChannelBaseForRound
+    }
+    device\.h: {
+        ncclP2pChannelForPart
+    }
+    strongstream\.h: {
+        ncclCudaGraphSame
     }
 }
+include.group\.h.ncclGroupCommJoin -> include.utils\.h.ncclMemoryStackPush
+
 group\.cc: {
     ncclGroupStart
 
@@ -95,29 +115,43 @@ group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueDequeue: 4
 enqueue\.cc: {
     ncclEnqueueCheck -> taskAppend: 5
 }
-enqueue\.cc.ncclEnqueueCheck -> include.group\.h.ncclGroupErrorCheck: 6 {
-    style: {
-        stroke: gray
-    }
-}
+enqueue\.cc.ncclEnqueueCheck -> include.group\.h.ncclGroupStartInternal: 1
 enqueue\.cc.ncclEnqueueCheck -> misc.argcheck\.cc.CommCheck: 2 {
     style: {
         stroke: gray
     }
 }
+enqueue\.cc.ncclEnqueueCheck -> init\.cc.ncclCommEnsureReady: 3
 enqueue\.cc.ncclEnqueueCheck -> misc.argcheck\.cc.ArgsCheck: 4 {
     style: {
         stroke: gray
     }
 }
-enqueue\.cc.ncclEnqueueCheck -> include.group\.h.ncclGroupStartInternal: 1
+enqueue\.cc.ncclEnqueueCheck -> include.group\.h.ncclGroupErrorCheck: 6 {
+    style: {
+        stroke: gray
+    }
+}
 enqueue\.cc.ncclEnqueueCheck -> group\.cc.ncclGroupEndInternal: 7
-enqueue\.cc.ncclEnqueueCheck -> init\.cc.ncclCommEnsureReady: 3
-enqueue\.cc.ncclEnqueueCheck -> init\.cc.ncclCommGetAsyncError: 7
+enqueue\.cc.ncclEnqueueCheck -> init\.cc.ncclCommGetAsyncError: 8
+
+enqueue\.cc.taskAppend -> include.collectives\.h.ncclTypeSize: 1
+enqueue\.cc.taskAppend -> include.group\.h.ncclGroupCommJoin: 2
+enqueue\.cc.taskAppend -> include.utils\.h.ncclMemoryStackAlloc: 3
+enqueue\.cc.taskAppend -> include.utils\.h.ncclInstruQueueEnqueue: 4
+enqueue\.cc.taskAppend -> include.channel\.h.ncclP2pChannelBaseForRound: 5
+enqueue\.cc.taskAppend -> include.device\.h.ncclP2pChannelForPart: 6
+enqueue\.cc.taskAppend -> include.group\.h.ncclGroupCommPreconnect: 7
+enqueue\.cc.taskAppend -> misc.strongstream\.cc.ncclCudaGetCapturingGraph: 8
+enqueue\.cc.taskAppend -> include.strongstream\.h.ncclCudaGraphSame: 9
 
 init\.cc: {
     ncclCommSetAsyncError
-    ncclCommGetAsyncError
+    ncclCommGetAsyncError: {
+        link: 'https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/api/comms.html#ncclcommgetasyncerror'
+    }
+    ncclCommGetAsyncError.style.stroke: green
+    ncclCommGetAsyncError.style.fill: palegreen
     
     ncclCommEnsureReady.style.stroke: red
     ncclCommEnsureReady.style.fill: mistyrose
@@ -125,7 +159,7 @@ init\.cc: {
 
 # misc/
 misc: {
-    #near: center-right
+    near: top-center
     argcheck\.cc: {
         CommCheck.style.stroke: gray
         CommCheck.style.fill: gainsboro
@@ -135,4 +169,8 @@ misc: {
     }
     argcheck\.cc.style.stroke: gray
     argcheck\.cc.style.fill: gainsboro
+
+    strongstream\.cc: {
+        ncclCudaGetCapturingGraph
+    }
 }

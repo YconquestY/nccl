@@ -1,0 +1,274 @@
+ncclFunc_t {
+    shape: class
+
+    ncclFuncBroadcast: 0
+    ncclFuncReduce: 1
+    ncclFuncAllGather: 2
+    ncclFuncReduceScatter: 3
+    ncclFuncAllReduce: 4
+    ncclFuncSendRecv: 5
+    ncclFuncSend: 6
+    ncclFuncRecv: 7
+    ncclNumFuncs: 8
+}
+ncclDataType_t {
+    shape: class
+}
+ncclComm {
+    shape: class
+
+    uint64_t: startMagic
+    struct ncclMemoryStack: memPermanent, memScoped
+    struct ncclSharedResources\*: sharedRes
+    struct ncclTopoSystem\*: topo
+    int: cudaDev
+    bool: checkPointers
+    int\': nChannels
+    int\'\': p2pnChannels
+    struct ncclComm\*: intraComm0 # Leader of intra-process `comm`s (self possible)
+    struct ncclComm\*\': groupNext # Holds "0x1" when not yet in a group
+    struct ncclKernelPlanner: planner
+    ncclConfig_t: config
+    …\'
+}
+ncclComm -> ncclSharedResources: sharedRes
+ncclComm -> ncclTopoSystem: topo
+ncclComm -> ncclKernelPlanner: planner {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclComm -> ncclComm: groupNext, intraComm0
+ncclComm -> ncclConfig_v21700: config {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclComm -> ncclMemoryStack: memPermanent, memScoped {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclSharedResources {
+    shape: class
+
+    int: refCount
+    struct ncclComm\*: owner
+    …
+}
+ncclSharedResources -> ncclComm: owner
+
+ncclTopoSystem {
+    shape: class
+
+    int: ststemId
+    uint64_t: hostHashes\[NCCL_TOPO_MAX_NODES\]
+    int\': nHosts
+    struct ncclTopoNodeSet: nodes\[NCCL_TOPO_NODE_TYPES\]
+    float: maxBw
+    float\': totalBw
+}
+ncclTopoSystem -> ncclTopoNodeSet: nodes {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclTopoNodeSet: {
+    shape: class
+
+    int: count
+    struct ncclTopoNode: nodes\[NCCL_TOPO_NODE_MAX\]
+}
+ncclTopoNodeSet -> ncclTopoNode: nodes {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclTopoNode: {
+    shape: class
+    …
+}
+ncclKernelPlanner {
+    shape: class
+    struct Peer
+    …
+}
+ncclKernelPlanner -> Peer
+Peer {
+    shape: class
+
+    bool: sendSeen, recvSeen
+    struct ncclInstruQueue: sendQueue, recvQueue
+}
+Peer -> ncclInstruQueue: sendQueue, recvQueue {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclInstruQueue {
+    shape: class
+    T\*: head, tail
+}
+ncclInstruQueue -> ncclInstruQueue: head, tail
+ncclInstruQueue -> ncclTaskP2p: T {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclTaskP2p {
+    shape: class
+
+    struct ncclTaskP2p\*: next
+    void\*: buff
+    size_t: bytes
+}
+ncclTaskP2p -> ncclTaskP2p: next
+
+ncclConfig_v21700 {
+    shape: class
+    int: blocking
+    …
+}
+ncclInfo {
+    shape: class
+
+    ncclFunc_t: coll
+    size_t: count
+    ncclDataType_t: datatype
+    int: root # Peer for P2P operations
+    ncclComm_t: comm
+    …
+}
+ncclInfo -> ncclComm: comm
+ncclInfo -> ncclFunc_t: coll {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclInfo -> ncclDataType_t: datatype {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclCommInitRankAsyncJob {
+    shape: class
+
+    struct ncclAsyncJob: base
+    struct ncclComm\*: comm
+    struct ncclComm\*\*: newcomm
+    int: cudaDev
+    # For `ncclCommInitRank`
+    int\': nranks, myrank;
+    ncclUniqueId: commId;
+    # For `ncclCommSplit`
+    struct ncclComm\*: parent
+    int\'\': color, key
+}
+ncclCommInitRankAsyncJob -> ncclAsyncJob: base {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclCommInitRankAsyncJob -> ncclComm: parent, newcomm
+
+ncclPreconnectJob: {
+    shape: class
+
+    struct ncclAsyncJob: base
+    struct ncclComm\*: comm
+    bool\*: algoNeedConnect
+}
+ncclAsyncJob {
+    shape: class
+
+    struct ncclAsyncJob\*: next
+    pthread_t: thread
+    ncclResult_t: result
+    struct ncclAsyncJob\* → ncclResult_t: func
+    struct ncclAsyncJob\* → void: undo
+    void\* → void: destructor
+    ncclGroupJobState_t: state
+    uint32_t\*: abortFlag
+    uint32_t\*: abortFlagDev
+    uint32_t\*: childAbortFlag
+    uint32_t\*: childAbortFlagDev
+    ncclComm_t: comm
+    int: destroyFlag
+}
+ncclPreconnectJob -> ncclAsyncJob: base {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclPreconnectJob -> ncclComm: comm
+
+ncclGroupJob {
+    shape: class
+
+    struct ncclAsyncJob: base
+    struct ncclComm\*\*: groupCommHeadPtr
+    struct ncclComm\*\*: groupCommPreconnectHeadPtr
+    ncclResult_t\* groupErrorPtr
+    bool\* abortFlagPtr
+    int\* groupBlockingPtr
+    struct ncclIntruQueue\*: asyncJobsPtr
+    bool: initialized
+}
+ncclGroupJob -> ncclAsyncJob: base {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclGroupJob -> ncclComm: groupCommPreconnectHeadPtr
+
+ncclMemoryStack {
+    shape: class
+
+    struct Hunk
+    struct Unhunk
+    struct Frame
+    allocateSpilled(…): void*
+    allocate(…): void*
+    struct Hunk\': stub
+    struct Frame\': topFrame
+}
+ncclMemoryStack -> Hunk
+ncclMemoryStack -> Hunk: stub {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclMemoryStack -> Unhunk
+ncclMemoryStack -> Unhunk: topFrame {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclMemoryStack -> Frame
+Hunk {
+    shape: class
+
+    struct Hunk\*: above # Reverse stack pointer?
+    size_t: size
+}
+Hunk -> Hunk: above
+
+Unhunk {
+    shape: class
+
+    struct Unhunk\*: next
+    void\*: obj
+}
+Unhunk -> Unhunk: next
+
+Frame {
+    shape: class
+    
+    struct Hunk\*: hunk # Top of non-empty hunks
+    uintptr_t: bumper, emd
+    struct Unhunk\*: unhunk
+    struct Frame\*: below
+}
+Frame -> Hunk: hunk
+Frame -> Unhunk: unhunk
+Frame -> Frame: below
