@@ -2,8 +2,14 @@
 collectives\.cc: {
     ncclSend
 }
+collectives\.cc.ncclSend -> include.collectives\.h.ncclTypeSize: 1 {
+    style: {
+        stroke: gray
+    }
+}
 collectives\.cc.ncclSend -> group\.cc.ncclGroupStart: 2
 collectives\.cc.ncclSend -> group\.cc.ncclGroupEnd: 4
+collectives\.cc.ncclSend -> enqueue\.cc.ncclEnqueueCheck: 3
 
 # include/
 include: {
@@ -29,28 +35,9 @@ include: {
         ncclGroupErrorCheck.style.stroke: gray
         ncclGroupErrorCheck.style.fill: gainsboro
 
-        ncclGroupStartInternal
+        ncclGroupStartInternal: {tooltip: Increment per-thread `ncclGroupMode`}
     }
 }
-collectives\.cc.ncclSend -> include.collectives\.h.ncclTypeSize: 1 {
-    style: {
-        stroke: gray
-    }
-}
-enqueue\.cc.ncclEnqueueCheck -> include.group\.h.ncclGroupErrorCheck: 6 {
-    style: {
-        stroke: gray
-    }
-}
-group\.cc.ncclGroupStart -> include.group\.h.ncclGroupStartInternal
-
-group\.cc.groupLaunch -> include.utils\.h.ncclInstruQueueEnqueue: 1
-group\.cc.groupLaunch -> include.group\.h.ncclGroupCommLeave: n + 1
-
-group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueEmpty: 1
-group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueHead: 2
-group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueDequeue: 4
-
 group\.cc: {
     ncclGroupStart
 
@@ -83,17 +70,50 @@ group\.cc: {
     groupLaunch -> doLaunches: n
     
     asyncJobLaunch -> ncclAsyncJobMain: 3
+    ncclAsyncJobMain -> ncclP2PPreconnectFunc: {
+        style: {
+            stroke-dash: 6
+        }
+    }
+    ncclP2PPreconnectFunc.style.stroke: red
+    ncclP2PPreconnectFunc.style.fill: mistyrose
 }
 group\.cc.ncclGroupEndInternal -> include.utils\.h.ncclInstruQueueEmpty: 1
 group\.cc.ncclGroupEndInternal -> include.utils\.h.ncclInstruQueueHead: 2
+group\.cc.ncclGroupEndInternal -> init\.cc.ncclCommSetAsyncError: 3
+group\.cc.groupLaunch -> init\.cc.ncclCommSetAsyncError: n + 2
+group\.cc.asyncJobLaunch -> init\.cc.ncclCommSetAsyncError: 5
+group\.cc.ncclGroupStart -> include.group\.h.ncclGroupStartInternal
+
+group\.cc.groupLaunch -> include.utils\.h.ncclInstruQueueEnqueue: 1
+group\.cc.groupLaunch -> include.group\.h.ncclGroupCommLeave: n + 1
+
+group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueEmpty: 1
+group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueHead: 2
+group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueDequeue: 4
 
 enqueue\.cc: {
     ncclEnqueueCheck -> taskAppend: 5
 }
-collectives\.cc.ncclSend -> enqueue\.cc.ncclEnqueueCheck: 3
-
+enqueue\.cc.ncclEnqueueCheck -> include.group\.h.ncclGroupErrorCheck: 6 {
+    style: {
+        stroke: gray
+    }
+}
+enqueue\.cc.ncclEnqueueCheck -> misc.argcheck\.cc.CommCheck: 2 {
+    style: {
+        stroke: gray
+    }
+}
+enqueue\.cc.ncclEnqueueCheck -> misc.argcheck\.cc.ArgsCheck: 4 {
+    style: {
+        stroke: gray
+    }
+}
 enqueue\.cc.ncclEnqueueCheck -> include.group\.h.ncclGroupStartInternal: 1
 enqueue\.cc.ncclEnqueueCheck -> group\.cc.ncclGroupEndInternal: 7
+enqueue\.cc.ncclEnqueueCheck -> init\.cc.ncclCommEnsureReady: 3
+enqueue\.cc.ncclEnqueueCheck -> init\.cc.ncclCommGetAsyncError: 7
 
 init\.cc: {
     ncclCommSetAsyncError
@@ -102,15 +122,6 @@ init\.cc: {
     ncclCommEnsureReady.style.stroke: red
     ncclCommEnsureReady.style.fill: mistyrose
 }
-
-enqueue\.cc.ncclEnqueueCheck -> init\.cc.ncclCommEnsureReady: 3
-enqueue\.cc.ncclEnqueueCheck -> init\.cc.ncclCommGetAsyncError: 7
-
-group\.cc.ncclGroupEndInternal -> init\.cc.ncclCommSetAsyncError: 3
-
-group\.cc.groupLaunch -> init\.cc.ncclCommSetAsyncError: n + 2
-
-group\.cc.asyncJobLaunch -> init\.cc.ncclCommSetAsyncError: 5
 
 # misc/
 misc: {
@@ -124,15 +135,4 @@ misc: {
     }
     argcheck\.cc.style.stroke: gray
     argcheck\.cc.style.fill: gainsboro
-}
-
-enqueue\.cc.ncclEnqueueCheck -> misc.argcheck\.cc.CommCheck: 2 {
-    style: {
-        stroke: gray
-    }
-}
-enqueue\.cc.ncclEnqueueCheck -> misc.argcheck\.cc.ArgsCheck: 4 {
-    style: {
-        stroke: gray
-    }
 }
