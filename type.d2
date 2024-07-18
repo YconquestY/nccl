@@ -20,35 +20,49 @@ ncclComm {
     uint64_t: startMagic
     struct ncclMemoryStack: memPermanent, memScoped
     struct ncclSharedResources\*: sharedRes
+    struct ncclChennel: channels\[MAXCHANNELS\]
     struct ncclTopoSystem\*: topo
-    int: cudaDev
+    uint64_t\*: connectSend, connectRecv # Bitmasks for `ncclTransportP2pSetup`
+    int: rank # My rank in the communicator
+    int\': cudaDev # My CUDA device index
+    int\'\': nNodes
+    int\'\'\': maxLocalRanks
     bool: checkPointers
-    int\': nChannels
-    int\'\': p2pnChannels
+    int\'\'\'\': nChannels, p2pnChannels
     struct ncclComm\*: intraComm0 # Leader of intra-process `comm`s (self possible)
-    struct ncclComm\*\': groupNext # Holds "0x1" when not yet in a group
+    # `groupNext` holds 0x1 when not yet in a group.
+    # `preconnectNext` is a subset of communicators in `groupNext`.
+    struct ncclComm\*\': groupNext, preconnectNext
+    struct P2pSchedulePair\*: p2pSchedule
     struct ncclKernelPlanner: planner
     ncclConfig_t: config
-    …\'
+    …
 }
 ncclComm -> ncclSharedResources: sharedRes
 ncclComm -> ncclTopoSystem: topo
+ncclComm -> ncclChannel: channels {
+    style: {
+        stroke-dash: 6
+    }
+}
 ncclComm -> ncclKernelPlanner: planner {
     style: {
         stroke-dash: 6
     }
 }
 ncclComm -> ncclComm: groupNext, intraComm0
-ncclComm -> ncclConfig_v21700: config {
-    style: {
-        stroke-dash: 6
-    }
-}
 ncclComm -> ncclMemoryStack: memPermanent, memScoped {
     style: {
         stroke-dash: 6
     }
 }
+ncclComm -> ncclConfig_v21700: config {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclComm -> P2pSchedulePair: p2pSchedule # Array
+
 ncclSharedResources {
     shape: class
 
@@ -88,12 +102,50 @@ ncclTopoNode: {
     shape: class
     …
 }
+ncclChannel {
+    shape: class
+
+    struct ncclChannelPeer\*\*: peers
+    …
+}
+ncclChannel -> ncclChannelPeer: peers {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclChannelPeer {
+    shape: class
+
+    struct ncclConnector: send\[NCCL_MAX_CONNS\]
+    struct ncclConnector\': recv\[NCCL_MAX_CONNS\]
+    int: refCount # Similar to `std::shared_ptr`?
+}
+ncclChannelPeer -> ncclConnector: send, recv {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclConnector {
+    shape: class
+    int: connected
+}
 ncclKernelPlanner {
     shape: class
+
     struct Peer
+    struct Peer\*: peers
+    int: nTasksP2p
+    struct ncclCudaStreamList\*: streams # User streams from all tasks
+    cudaStream_t: streamRecent # Most recent user stream
     …
 }
 ncclKernelPlanner -> Peer
+ncclKernelPlanner -> Peer: peers
+ncclKernelPlanner -> ncclCudaStreamList: streams {
+    style: {
+        stroke-dash: 6
+    }
+}
 Peer {
     shape: class
 
@@ -133,10 +185,12 @@ ncclInfo {
     shape: class
 
     ncclFunc_t: coll
+    void\*: recvbuff
     size_t: count
     ncclDataType_t: datatype
     int: root # Peer for P2P operations
     ncclComm_t: comm
+    cudaStream_t: stream
     …
 }
 ncclInfo -> ncclComm: comm
@@ -265,10 +319,22 @@ Frame {
     shape: class
     
     struct Hunk\*: hunk # Top of non-empty hunks
-    uintptr_t: bumper, emd
+    uintptr_t: bumper, end
     struct Unhunk\*: unhunk
     struct Frame\*: below
 }
 Frame -> Hunk: hunk
 Frame -> Unhunk: unhunk
 Frame -> Frame: below
+
+P2pSchedulePair {
+    shape: class
+    int: sendRank, recvRank
+}
+ncclCudaStreamList {
+    shape: class
+
+    struct ncclCudaStreamList\*: next
+    cudaStream_t: stream
+}
+ncclCudaStreamList -> ncclCudaStreamList: next

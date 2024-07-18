@@ -26,7 +26,7 @@ include: {
         ncclInstruQueueDequeue
         ncclInstruQueueEnqueue
         ncclMemoryStackAlloc
-        ncclMemoryStackPush
+        ncclMemoryStackPush -> ncclMemoryStack\:\:allocate
     }
     collectives\.h: {
         ncclTypeSize.style.stroke: gray
@@ -44,19 +44,30 @@ include: {
 
         ncclGroupStartInternal: {tooltip: Increment per-thread `ncclGroupMode`}
 
-        ncclGroupCommPreconnect
+        ncclGroupCommPreconnect: {tooltip: Mark channels for pre-connection by inserting its communicator to head of linked list}
     }
     channel\.h: {
-        ncclP2pChannelBaseForRound
+        ncclP2pChannelBaseForRound: {tooltip: Compute P2P channel index. In the case of 1 node, simply cap channel number at 256.}
     }
     device\.h: {
-        ncclP2pChannelForPart
+        ncclP2pChannelForPart: {tooltip: Distribute P2P channels to maximize B/W}
+    }
+    bitops\.h: {
+        reverseBits: {tooltip: Reverse the least significant n bits and reset the remaining top bits}
+        reverseSubBits.style.stroke: gray
+        reverseSubBits.style.fill: gainsboro
+
+        countOneBits
     }
     strongstream\.h: {
         ncclCudaGraphSame
     }
 }
 include.group\.h.ncclGroupCommJoin -> include.utils\.h.ncclMemoryStackPush
+include.utils\.h.ncclMemoryStack\:\:allocate -> misc.utils\.cc.ncclMemoryStack\:\:allocateSpilled
+include.device\.h.ncclP2pChannelForPart -> include.bitops\.h.reverseBits: 2
+include.bitops\.h.reverseBits -> include.bitops\.h.reverseSubBits
+include.device\.h.ncclP2pChannelForPart -> include.bitops\.h.countOneBits: 1
 
 group\.cc: {
     ncclGroupStart
@@ -135,10 +146,10 @@ enqueue\.cc.ncclEnqueueCheck -> include.group\.h.ncclGroupErrorCheck: 6 {
 enqueue\.cc.ncclEnqueueCheck -> group\.cc.ncclGroupEndInternal: 7
 enqueue\.cc.ncclEnqueueCheck -> init\.cc.ncclCommGetAsyncError: 8
 
-enqueue\.cc.taskAppend -> include.collectives\.h.ncclTypeSize: 1
 enqueue\.cc.taskAppend -> include.group\.h.ncclGroupCommJoin: 2
 enqueue\.cc.taskAppend -> include.utils\.h.ncclMemoryStackAlloc: 3
 enqueue\.cc.taskAppend -> include.utils\.h.ncclInstruQueueEnqueue: 4
+enqueue\.cc.taskAppend -> include.collectives\.h.ncclTypeSize: 1
 enqueue\.cc.taskAppend -> include.channel\.h.ncclP2pChannelBaseForRound: 5
 enqueue\.cc.taskAppend -> include.device\.h.ncclP2pChannelForPart: 6
 enqueue\.cc.taskAppend -> include.group\.h.ncclGroupCommPreconnect: 7
@@ -160,6 +171,14 @@ init\.cc: {
 # misc/
 misc: {
     near: top-center
+
+    strongstream\.cc: {
+        ncclCudaGetCapturingGraph
+    }
+    utils\.cc: {
+        ncclMemoryStack\:\:allocateSpilled.style.stroke: red
+        ncclMemoryStack\:\:allocateSpilled.style.fill: mistyrose
+    }
     argcheck\.cc: {
         CommCheck.style.stroke: gray
         CommCheck.style.fill: gainsboro
@@ -169,8 +188,4 @@ misc: {
     }
     argcheck\.cc.style.stroke: gray
     argcheck\.cc.style.fill: gainsboro
-
-    strongstream\.cc: {
-        ncclCudaGetCapturingGraph
-    }
 }
