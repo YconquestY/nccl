@@ -1,3 +1,4 @@
+placeholder.style.opacity: 0
 
 collectives\.cc: {
     ncclSend/Recv: {tooltip: Blocking for GPU}
@@ -59,9 +60,6 @@ include: {
 
         countOneBits
     }
-    strongstream\.h: {
-        ncclCudaGraphSame
-    }
 }
 include.group\.h.ncclGroupCommJoin -> include.utils\.h.ncclMemoryStackPush
 include.utils\.h.ncclMemoryStack\:\:allocate -> misc.utils\.cc.ncclMemoryStack\:\:allocateSpilled
@@ -70,7 +68,11 @@ include.bitops\.h.reverseBits -> include.bitops\.h.reverseSubBits
 include.device\.h.ncclP2pChannelForPart -> include.bitops\.h.countOneBits: 1
 
 group\.cc: {
-    ncclGroupStart
+    ncclGroupStart: {
+        link: 'https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/api/group.html#ncclgroupstart'
+    }
+    ncclGroupStart.style.stroke: green
+    ncclGroupStart.style.fill: palegreen
 
     groupCleanup.style.stroke: gray
     groupCleanup.style.fill: gainsboro
@@ -80,6 +82,11 @@ group\.cc: {
             stroke-dash: 6
         }
     }
+    ncclGroupEnd: {
+        link: 'https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/api/group.html#ncclgroupend'
+    }
+    ncclGroupEnd.style.stroke: green
+    ncclGroupEnd.style.fill: palegreen
     ncclGroupEnd -> ncclGroupEndInternal
     ncclGroupEndInternal -> groupAsyncJobMain: 4 {
         style: {
@@ -154,7 +161,7 @@ enqueue\.cc.taskAppend -> include.channel\.h.ncclP2pChannelBaseForRound: 5
 enqueue\.cc.taskAppend -> include.device\.h.ncclP2pChannelForPart: 6
 enqueue\.cc.taskAppend -> include.group\.h.ncclGroupCommPreconnect: 7
 enqueue\.cc.taskAppend -> misc.strongstream\.cc.ncclCudaGetCapturingGraph: 8
-enqueue\.cc.taskAppend -> include.strongstream\.h.ncclCudaGraphSame: 9
+enqueue\.cc.taskAppend -> include\'.strongstream\.h.ncclCudaGraphSame: 9
 
 init\.cc: {
     ncclCommSetAsyncError
@@ -167,6 +174,7 @@ init\.cc: {
     ncclCommEnsureReady.style.stroke: red
     ncclCommEnsureReady.style.fill: mistyrose
 }
+init\.cc.ncclCommGetAsyncError -> placeholder
 
 # misc/
 misc: {
@@ -188,4 +196,19 @@ misc: {
     }
     argcheck\.cc.style.stroke: gray
     argcheck\.cc.style.fill: gainsboro
+}
+misc.strongstream\.cc.ncclCudaGetCapturingGraph -> include\'.cudawrap\.h.ncclCudaDriverVersion
+
+# include/
+include\':{
+    cudawrap\.h: {
+        ncclCudaDriverVersion.style.stroke: gray
+        ncclCudaDriverVersion.style.fill: gainsboro
+    }
+    cudawrap\.h.style.stroke: gray
+    cudawrap\.h.style.fill: gainsboro
+
+    strongstream\.h: {
+        ncclCudaGraphSame
+    }
 }

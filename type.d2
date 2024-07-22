@@ -20,7 +20,7 @@ ncclComm {
     uint64_t: startMagic
     struct ncclMemoryStack: memPermanent, memScoped
     struct ncclSharedResources\*: sharedRes
-    struct ncclChennel: channels\[MAXCHANNELS\]
+    struct ncclChannel: channels\[MAXCHANNELS\]
     struct ncclTopoSystem\*: topo
     uint64_t\*: connectSend, connectRecv # Bitmasks for `ncclTransportP2pSetup`
     int: rank # My rank in the communicator
@@ -29,13 +29,16 @@ ncclComm {
     int\'\'\': maxLocalRanks
     bool: checkPointers
     int\'\'\'\': nChannels, p2pnChannels
+    ncclResult_t: asyncResult # For NCCL asynchronous operations
     struct ncclComm\*: intraComm0 # Leader of intra-process `comm`s (self possible)
+    struct ncclProxyState\*: proxyState
     # `groupNext` holds 0x1 when not yet in a group.
     # `preconnectNext` is a subset of communicators in `groupNext`.
     struct ncclComm\*\': groupNext, preconnectNext
     struct P2pSchedulePair\*: p2pSchedule
     struct ncclKernelPlanner: planner
     ncclConfig_t: config
+    struct ncclGroupJob\*: groupJob
     …
 }
 ncclComm -> ncclSharedResources: sharedRes
@@ -62,6 +65,8 @@ ncclComm -> ncclConfig_v21700: config {
     }
 }
 ncclComm -> P2pSchedulePair: p2pSchedule # Array
+ncclComm -> ncclProxyState: proxyState
+ncclComm -> ncclGroupJob: groupJob
 
 ncclSharedResources {
     shape: class
@@ -137,11 +142,17 @@ ncclKernelPlanner {
     int: nTasksP2p
     struct ncclCudaStreamList\*: streams # User streams from all tasks
     cudaStream_t: streamRecent # Most recent user stream
+    struct ncclCudaGraph: capturingGraph
     …
 }
 ncclKernelPlanner -> Peer
 ncclKernelPlanner -> Peer: peers
 ncclKernelPlanner -> ncclCudaStreamList: streams {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclKernelPlanner -> ncclCudaGraph: capturingGraph {
     style: {
         stroke-dash: 6
     }
@@ -163,6 +174,11 @@ ncclInstruQueue {
 }
 ncclInstruQueue -> ncclInstruQueue: head, tail
 ncclInstruQueue -> ncclTaskP2p: T {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclInstruQueue -> ncclAsyncJob: T {
     style: {
         stroke-dash: 6
     }
@@ -232,8 +248,20 @@ ncclPreconnectJob: {
     struct ncclComm\*: comm
     bool\*: algoNeedConnect
 }
+ncclPreconnectJob -> ncclAsyncJob: base {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclPreconnectJob -> ncclComm: comm
+ncclAsyncJob -> ncclComm: comm {
+    style: {
+        stroke-dash: 6
+    }
+}
 ncclAsyncJob {
     shape: class
+    near: top-center
 
     struct ncclAsyncJob\*: next
     pthread_t: thread
@@ -249,22 +277,17 @@ ncclAsyncJob {
     ncclComm_t: comm
     int: destroyFlag
 }
-ncclPreconnectJob -> ncclAsyncJob: base {
-    style: {
-        stroke-dash: 6
-    }
-}
-ncclPreconnectJob -> ncclComm: comm
+
 
 ncclGroupJob {
     shape: class
 
     struct ncclAsyncJob: base
     struct ncclComm\*\*: groupCommHeadPtr
-    struct ncclComm\*\*: groupCommPreconnectHeadPtr
-    ncclResult_t\* groupErrorPtr
-    bool\* abortFlagPtr
-    int\* groupBlockingPtr
+    struct ncclComm\*\*\': groupCommPreconnectHeadPtr
+    ncclResult_t\*: groupErrorPtr
+    bool\*: abortFlagPtr
+    int\*: groupBlockingPtr
     struct ncclIntruQueue\*: asyncJobsPtr
     bool: initialized
 }
@@ -274,6 +297,7 @@ ncclGroupJob -> ncclAsyncJob: base {
     }
 }
 ncclGroupJob -> ncclComm: groupCommPreconnectHeadPtr
+ncclGroupJob -> ncclInstruQueue: asyncJobsPtr
 
 ncclMemoryStack {
     shape: class
@@ -338,3 +362,14 @@ ncclCudaStreamList {
     cudaStream_t: stream
 }
 ncclCudaStreamList -> ncclCudaStreamList: next
+
+ncclCudaGraph {
+    shape: class
+    cudaGraph_t: graph
+    unsigned long long: graphId
+}
+
+ncclProxyState {
+    shape: class
+    ncclResult_t: proxyResult
+}
