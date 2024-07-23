@@ -88,7 +88,7 @@ group\.cc: {
     ncclGroupEnd.style.stroke: green
     ncclGroupEnd.style.fill: palegreen
     ncclGroupEnd -> ncclGroupEndInternal
-    ncclGroupEndInternal -> groupAsyncJobMain: 4 {
+    ncclGroupEndInternal -> ncclAsyncJobMain: 4 {
         style: {
             stroke-dash: 6
         }
@@ -96,7 +96,7 @@ group\.cc: {
     ncclGroupEndInternal -> groupLaunch: 2*
     ncclGroupEndInternal -> groupResetJobState: 3*
 
-    groupAsyncJobMain -> groupLaunchNonBlocking
+    ncclAsyncJobMain -> groupLaunchNonBlocking: ncclGroupEndInternal
     groupLaunchNonBlocking -> groupLaunch
     groupLaunch -> groupCleanup: fail {
         style: {
@@ -107,14 +107,12 @@ group\.cc: {
     groupLaunch -> asyncJobLaunch: 2
     groupLaunch -> doLaunches: n
     
-    asyncJobLaunch -> ncclAsyncJobMain: 3
-    ncclAsyncJobMain -> ncclP2PPreconnectFunc: {
+    asyncJobLaunch -> ncclAsyncJobMain: 3 {
         style: {
             stroke-dash: 6
         }
     }
-    ncclP2PPreconnectFunc.style.stroke: red
-    ncclP2PPreconnectFunc.style.fill: mistyrose
+    ncclAsyncJobMain -> ncclP2PPreconnectFunc
 }
 group\.cc.ncclGroupEndInternal -> include.utils\.h.ncclInstruQueueEmpty: 1
 group\.cc.ncclGroupEndInternal -> include.utils\.h.ncclInstruQueueHead: 2
@@ -130,6 +128,19 @@ group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueEmpty: 1
 group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueHead: 2
 group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueDequeue: 4
 
+group\.cc.ncclP2PPreconnectFunc -> transport\.cc.ncclTransportP2pSetup
+
+transport\.cc: {
+    ncclTransportP2pSetup -> selectTransport: 2
+}
+transport\.cc.ncclTransportP2pSetup -> misc.strongstream\.cc.ncclStrongStreamAcquireUncaptured: 1
+transport\.cc.selectTransport -> transport.net\.cc.canConnect: 1
+
+transport: {
+    net\.cc: {
+        canConnect
+    }
+}
 enqueue\.cc: {
     ncclEnqueueCheck -> taskAppend: 5
 }

@@ -23,12 +23,15 @@ ncclComm {
     struct ncclChannel: channels\[MAXCHANNELS\]
     struct ncclTopoSystem\*: topo
     uint64_t\*: connectSend, connectRecv # Bitmasks for `ncclTransportP2pSetup`
-    int: rank # My rank in the communicator
-    int\': cudaDev # My CUDA device index
-    int\'\': nNodes
-    int\'\'\': maxLocalRanks
+    # `rank` marks my rank in the communicator.
+    # `nRanks` is the total number of GPUs in the communicator.
+    # `cudaDev` marks my CUDA device index
+    int: rank, nRanks, cudaDev
+    cpu_set_t: cpuAffinity # CPU affinity **of GPU**
+    int\': nNodes
+    int\'\': maxLocalRanks
     bool: checkPointers
-    int\'\'\'\': nChannels, p2pnChannels
+    int\'\'\': nChannels, p2pnChannels
     ncclResult_t: asyncResult # For NCCL asynchronous operations
     struct ncclComm\*: intraComm0 # Leader of intra-process `comm`s (self possible)
     struct ncclProxyState\*: proxyState
@@ -73,9 +76,37 @@ ncclSharedResources {
 
     int: refCount
     struct ncclComm\*: owner
+    struct ncclStrongStream: deviceStream, hostStream
     …
 }
 ncclSharedResources -> ncclComm: owner
+ncclSharedResources -> ncclStrongStream: deviceStream, hostStream {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclStrongStream {
+    shape: class
+
+    cudaStream_t: cudaStream
+    cudaEvent_t: serialEvent
+    bool: everCaptured
+    bool\': serialEventNeedsRecord
+    struct ncclStrongStreamGraph\*: graphHead
+}
+ncclStrongStream -> ncclStrongStreamGraph: graphHead
+
+ncclStrongStreamGraph {
+    shape: class
+
+    struct ncclStrongStreamGraph\*: next
+    bool: alive
+    unsigned long long: graphId
+    # Starting node(s) of graph
+    int: tipCount, tipCapacity
+    cudaGraphNode_t\*: tipNodes
+}
+ncclStrongStreamGraph -> ncclStrongStreamGraph: next
 
 ncclTopoSystem {
     shape: class
@@ -368,8 +399,26 @@ ncclCudaGraph {
     cudaGraph_t: graph
     unsigned long long: graphId
 }
-
 ncclProxyState {
     shape: class
     ncclResult_t: proxyResult
+}
+ncclConnect {
+    shape: class
+    char: data\[CONNECT_SIZE\]
+}
+ncclTransport {
+    shape: class
+
+    const char: name\[8\]
+    canConnect(…): ncclResult_t
+    struct ncclTransportComm send, recv
+}
+ncclTransport -> ncclTransportComm: send, recv {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclTransportComm {
+    shape: class
 }
