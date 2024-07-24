@@ -14,6 +14,15 @@ ncclFunc_t {
 ncclDataType_t {
     shape: class
 }
+ncclPeerInfo {
+    shape: class
+
+    int: rank, cudaDev
+    dev_t: shmDev
+    struct ncclComm\*: comm
+}
+ncclPeerInfo -> ncclComm: comm
+
 ncclComm {
     shape: class
 
@@ -21,7 +30,9 @@ ncclComm {
     struct ncclMemoryStack: memPermanent, memScoped
     struct ncclSharedResources\*: sharedRes
     struct ncclChannel: channels\[MAXCHANNELS\]
+    struct ncclPeerInfo\*: peerInfo
     struct ncclTopoSystem\*: topo
+    void\*: bootstrap
     uint64_t\*: connectSend, connectRecv # Bitmasks for `ncclTransportP2pSetup`
     # `rank` marks my rank in the communicator.
     # `nRanks` is the total number of GPUs in the communicator.
@@ -45,6 +56,7 @@ ncclComm {
     …
 }
 ncclComm -> ncclSharedResources: sharedRes
+ncclComm -> ncclPeerInfo: peerInfo
 ncclComm -> ncclTopoSystem: topo
 ncclComm -> ncclChannel: channels {
     style: {
@@ -144,11 +156,8 @@ ncclChannel {
     struct ncclChannelPeer\*\*: peers
     …
 }
-ncclChannel -> ncclChannelPeer: peers {
-    style: {
-        stroke-dash: 6
-    }
-}
+ncclChannel -> ncclChannelPeer: peers
+
 ncclChannelPeer {
     shape: class
 
@@ -164,7 +173,10 @@ ncclChannelPeer -> ncclConnector: send, recv {
 ncclConnector {
     shape: class
     int: connected
+    struct ncclTransportComm\*: transportComm
 }
+ncclConnector -> ncclTransportComm: transportComm
+
 ncclKernelPlanner {
     shape: class
 
@@ -412,7 +424,7 @@ ncclTransport {
 
     const char: name\[8\]
     canConnect(…): ncclResult_t
-    struct ncclTransportComm send, recv
+    struct ncclTransportComm: send, recv
 }
 ncclTransport -> ncclTransportComm: send, recv {
     style: {

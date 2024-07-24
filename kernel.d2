@@ -112,7 +112,7 @@ group\.cc: {
             stroke-dash: 6
         }
     }
-    ncclAsyncJobMain -> ncclP2PPreconnectFunc
+    ncclAsyncJobMain -> ncclP2PPreconnectFunc: asyncJobLaunch
 }
 group\.cc.ncclGroupEndInternal -> include.utils\.h.ncclInstruQueueEmpty: 1
 group\.cc.ncclGroupEndInternal -> include.utils\.h.ncclInstruQueueHead: 2
@@ -131,14 +131,34 @@ group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueDequeue: 4
 group\.cc.ncclP2PPreconnectFunc -> transport\.cc.ncclTransportP2pSetup
 
 transport\.cc: {
+    ncclTransportP2pSetup: {tooltip: `recvMask`/`sendMask`, i.e., `comm->connectRecv\[…\]`/`comm->connectSend\[…\]`, was set previously in `taskAppend`. The mask is per-channel based.}
     ncclTransportP2pSetup -> selectTransport: 2
+    selectTransport: {tooltip: `ncclTransports` is an array of different transport methods.}
 }
 transport\.cc.ncclTransportP2pSetup -> misc.strongstream\.cc.ncclStrongStreamAcquireUncaptured: 1
-transport\.cc.selectTransport -> transport.net\.cc.canConnect: 1
+transport\.cc.ncclTransportP2pSetup -> bootstrap\.cc.bootstrapSend/bootstrapRecv: 3
+transport\.cc.ncclTransportP2pSetup -> transport.p2p\.cc.p2pSendConnect/p2pRecvConnect: 4 {
+    style: {
+        stroke-dash: 6
+    }
+}
+transport\.cc.selectTransport -> transport.p2p\.cc.p2pCanConnect: 1
+transport\.cc.selectTransport -> transport.p2p\.cc.p2pSendSetup/p2pRecvSetup: 2
 
+bootstrap\.cc {
+    bootstrapSend/bootstrapRecv.style.stroke: red
+    bootstrapSend/bootstrapRecv.style.fill: mistyrose
+}
 transport: {
-    net\.cc: {
-        canConnect
+    p2p\.cc: {
+        p2pCanConnect.style.stroke: red
+        p2pCanConnect.style.fill: mistyrose
+
+        p2pSendSetup/p2pRecvSetup.style.stroke: red
+        p2pSendSetup/p2pRecvSetup.style.fill: mistyrose
+
+        p2pSendConnect/p2pRecvConnect.style.stroke: red
+        p2pSendConnect/p2pRecvConnect.style.fill: mistyrose
     }
 }
 enqueue\.cc: {
@@ -175,7 +195,7 @@ enqueue\.cc.taskAppend -> misc.strongstream\.cc.ncclCudaGetCapturingGraph: 8
 enqueue\.cc.taskAppend -> include\'.strongstream\.h.ncclCudaGraphSame: 9
 
 init\.cc: {
-    ncclCommSetAsyncError
+    ncclCommSetAsyncError: {tooltip: Unlike `ncclCommGetAsyncError`, this function is not exposed to library users as API.}
     ncclCommGetAsyncError: {
         link: 'https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/api/comms.html#ncclcommgetasyncerror'
     }
