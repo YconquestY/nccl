@@ -130,6 +130,11 @@ group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueDequeue: 4
 
 group\.cc.ncclP2PPreconnectFunc -> transport\.cc.ncclTransportP2pSetup
 
+group\.cc.doLaunches -> enqueue\.cc\'.ncclLaunchKernel: n
+
+enqueue\.cc\': {
+    ncclLaunchKernel.style.double-border: true
+}
 transport\.cc: {
     ncclTransportP2pSetup: {tooltip: `recvMask`/`sendMask`, i.e., `comm->connectRecv\[…\]`/`comm->connectSend\[…\]`, was set previously in `taskAppend`. The mask is per-channel based.}
     ncclTransportP2pSetup -> selectTransport: 2
