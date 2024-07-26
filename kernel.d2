@@ -130,9 +130,11 @@ group\.cc.asyncJobLaunch -> include.utils\.h.ncclInstruQueueDequeue: 4
 
 group\.cc.ncclP2PPreconnectFunc -> transport\.cc.ncclTransportP2pSetup
 
+group\.cc.doLaunches -> enqueue\.cc\'.ncclLaunchPrepare: m
 group\.cc.doLaunches -> enqueue\.cc\'.ncclLaunchKernel: n
 
 enqueue\.cc\': {
+    ncclLaunchPrepare
     ncclLaunchKernel.style.double-border: true
 }
 transport\.cc: {

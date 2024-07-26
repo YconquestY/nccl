@@ -187,6 +187,8 @@ ncclKernelPlanner {
     cudaStream_t: streamRecent # Most recent user stream
     struct ncclCudaGraph: capturingGraph
     …
+    struct ncclInstruQueue: planQueue
+    struct ncclKernelPlan\*: unlaunchedPlansHead
 }
 ncclKernelPlanner -> Peer
 ncclKernelPlanner -> Peer: peers
@@ -199,6 +201,17 @@ ncclKernelPlanner -> ncclCudaGraph: capturingGraph {
     style: {
         stroke-dash: 6
     }
+}
+ncclKernelPlanner -> ncclInstruQueue: planQueue {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclKernelPlanner -> ncclKernelPlan: unlaunchedPlansHead
+
+ncclKernelPlan {
+    shape: class
+    void\*: kernelFn
 }
 Peer {
     shape: class
@@ -222,6 +235,11 @@ ncclInstruQueue -> ncclTaskP2p: T {
     }
 }
 ncclInstruQueue -> ncclAsyncJob: T {
+    style: {
+        stroke-dash: 6
+    }
+}
+ncclInstruQueue -> ncclKernelPlan: T {
     style: {
         stroke-dash: 6
     }
