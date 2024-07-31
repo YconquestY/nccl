@@ -1,0 +1,190 @@
+
+# ../
+compile: |bash
+    make -j src.build
+|
+compile.style.stroke: transparent
+compile.style.fill: transparent
+
+compile -> \.\./Makefile.src\.%: {
+    style: {
+        stroke: black
+    }
+}
+\.\./Makefile: {
+    # Go to directory `src/` and proceed with `make` with the `BUILDDIR` flag.
+    # It carries the value of `ABSBUILDDIR` explained below.
+    src\.%: |Makefile
+        src.%:
+            ${MAKE} -C src $* BUILDDIR=${ABSBUILDDIR}
+    |
+    src\.% -> dir: {
+        style: {
+            stroke: gray
+            stroke-dash: 6
+        }
+    }
+    # We are now in the `nccl` directory. First, function `abspath` converts
+    # `./build` to an absolute path, which is assigned to `BUILDDIR`.
+    # `BUILDDIR` is converted to an absolute path again and assigned to
+    # `ABSBUILDDIR`.
+    dir: |Makefile
+        BUILDDIR ?= $(abspath ./build)
+        ABSBUILDDIR := $(abspath $(BUILDDIR))
+    |
+    dir.style.stroke: gray
+}
+\.\./Makefile.style.stroke: gray
+\.\./Makefile.style.fill: transparent
+
+\.\./Makefile.src\.% -> Makefile.build: {
+    style: {
+        stroke: black
+    }
+}
+# ./
+Makefile: {
+    build: |Makefile
+        ##### rules
+        build : lib staticlib
+
+        lib : $(INCTARGETS) $(LIBDIR)/$(LIBTARGET) $(PKGDIR)/$(PKGTARGET)
+
+        staticlib : $(LIBDIR)/$(STATICLIBTARGET)
+    |
+    build -> prerequisite: {
+        style: {
+            stroke: black
+        }
+    }
+    prerequisite: |Makefile
+        $(LIBDIR)/$(LIBTARGET): $(LIBOBJ) $(DEVMANIFEST)
+            @printf "Linking    %-35s > %s\n" $(LIBTARGET) $@
+            mkdir -p $(LIBDIR)
+            $(CXX) $(CXXFLAGS) -shared -Wl,--no-as-needed -Wl,-soname,$(LIBSONAME) -o $@ $(LIBOBJ) $$(cat $(DEVMANIFEST)) $(LDFLAGS)
+            ln -sf $(LIBSONAME) $(LIBDIR)/$(LIBNAME)
+            ln -sf $(LIBTARGET) $(LIBDIR)/$(LIBSONAME)
+
+        $(LIBDIR)/$(STATICLIBTARGET): $(LIBOBJ) $(DEVMANIFEST)
+            @printf "Archiving  %-35s > %s\n" $(STATICLIBTARGET) $@
+            mkdir -p $(LIBDIR)
+            ar cr $@ $(LIBOBJ) $$(cat $(DEVMANIFEST))
+    |
+    prerequisite -> device: {
+        style: {
+            stroke: black
+        }
+    }
+    device: |Makefile
+        $(DEVMANIFEST): ALWAYS_REBUILD $(INCTARGETS)
+            $(MAKE) -C ./device
+        
+        # Empty target to force rebuild
+        ALWAYS_REBUILD:
+    |
+}
+Makefile.style.stroke: gray
+Makefile.style.fill: transparent
+
+Makefile.device -> device.Makefile.-include: {
+    style: {
+        stroke: black
+    }
+}
+# device/
+device: {
+    Makefile: {
+        -include: |Makefile
+            # The trailing ";" is necessary to make this an "empty recipe":
+            # https://www.gnu.org/software/make/manual/html_node/Empty-Recipes.html
+            $(OBJDIR)/gensrc/rules.mk: $(OBJDIR)/gensrc ;
+
+            -include $(OBJDIR)/gensrc/rules.mk
+            # "gensrc/rules.mk" populates $(LIB_OBJS_GEN)
+        |
+        -include -> py: {
+            style: {
+                stroke: black
+            }
+        }
+        py: |Makefile
+            ifeq (1,1)
+            # Case if the <gensrc> directory is generated on-demand:
+            $(OBJDIR)/gensrc: generate.py
+                @mkdir -p $@
+                (which python3 >/dev/null OR \
+                  (bar='!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'; \
+                   printf "\n$${bar}\nERROR: Building NCCL requires a Python 3 installation invokable as 'python3'.\n$${bar}\n\n" 1>&2; \
+                   exit 1)) \
+                && ./generate.py $@ "$(ONLY_FUNCS)"
+        | # `|` is code delimiter, so `OR` is used instead of `||`.
+        py: {tooltip: By default, `ONLY_FUNCS` is not defined. One may specify it as command-line argument along with `make`, which will be passed down recursively with `\$\{MAKE\}`.}
+    }
+    Makefile.style.stroke: gray
+    Makefile.style.fill: white
+
+    Makefile.py -> generate\.py: {
+        style: {
+            stroke: black
+        }
+    }
+    generate\.py: {
+        direction: right
+
+        func_rows.style.stroke: black
+        func_rows.style.fill: white
+        func_rows -> enumerate_func_rows: 1
+        func_rows -> validate: 2
+        func_rows -> primary_funcs: {
+            style: {
+                stroke: black
+            }
+        }
+        validate -> required_cuda: 1
+        validate -> func_filter: 2
+
+        primary_funcs.style.stroke: black
+        primary_funcs.style.fill: white
+        primary_funcs -> equivalent_primary
+        primary_funcs -> primary_to_index: {
+            style: {
+                stroke: black
+            }
+        }
+        primary_funcs -> kernel_funcs: {
+            style: {
+                stroke: black
+            }
+        }
+        primary_funcs -> name_to_funcs: partition_by_name {
+            style: {
+                stroke: black
+            }
+        }
+        primary_to_index: {tooltip: `primary_to_index\[primary_funcs\[i\]\]` is `i`}
+        primary_to_index.style.stroke: black
+        primary_to_index.style.fill: white
+
+        kernel_funcs.style.stroke: black
+        kernel_funcs.style.fill: white
+        kernel_funcs -> best_kernel
+        kernel_funcs -> name_to_kernels: partition_by_name {
+            style: {
+                stroke: black
+            }
+        }
+        best_kernel: {tooltip: Every distinct tuple returned will instantiate a specified `ncclDevKernel_…`.}
+        best_kernel -> best: 1
+        best_kernel -> equivalent_primary: 2
+        best_kernel -> func_filter: 3
+
+        name_to_funcs.style.stroke: black
+        name_to_funcs.style.fill: white
+
+        name_to_kernels.style.stroke: black
+        name_to_kernels.style.fill: white
+    }
+    commom\.h: {
+        DEFINE_ncclDevKernel
+    }
+}
