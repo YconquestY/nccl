@@ -6,24 +6,19 @@ compile: |bash
 compile.style.stroke: transparent
 compile.style.fill: transparent
 
-compile -> \.\./Makefile.src\.%: {
+compile -> \.\..Makefile.src\.%: {
     style: {
         stroke: black
     }
 }
-\.\./Makefile: {
+
+\.\..Makefile: {
     # Go to directory `src/` and proceed with `make` with the `BUILDDIR` flag.
     # It carries the value of `ABSBUILDDIR` explained below.
     src\.%: |Makefile
         src.%:
             ${MAKE} -C src $* BUILDDIR=${ABSBUILDDIR}
     |
-    src\.% -> dir: {
-        style: {
-            stroke: gray
-            stroke-dash: 6
-        }
-    }
     # We are now in the `nccl` directory. First, function `abspath` converts
     # `./build` to an absolute path, which is assigned to `BUILDDIR`.
     # `BUILDDIR` is converted to an absolute path again and assigned to
@@ -34,14 +29,142 @@ compile -> \.\./Makefile.src\.%: {
     |
     dir.style.stroke: gray
 }
-\.\./Makefile.style.stroke: gray
-\.\./Makefile.style.fill: transparent
+\.\..Makefile.style.stroke: gray
+\.\..Makefile.style.fill: white
 
-\.\./Makefile.src\.% -> Makefile.build: {
+\.\..Makefile.src\.% -> Makefile.build: {
     style: {
         stroke: black
     }
 }
+\.\..Makefile.src\.% -> \.\..Makefile.dir: {
+    style: {
+        stroke: gray
+        stroke-dash: 6
+    }
+}
+# ../build/obj/device/gensrc/
+\.\..build: {
+    obj: {
+        device: {
+            gensrc: {
+                device_table\.cu: {
+                    code: |cpp
+                        __device__ void ncclDevFunc_…();
+
+
+                        __device__ ncclDevFuncPtr_t const ncclDevFuncTable[] = {
+                            …
+                        nullptr};
+                    |
+                    code.style.stroke: transparent
+                }
+                device_table\.cu: {
+                    style: {
+                        stroke: gray
+                        double-border: true
+                        fill: white
+                    }
+                }
+                # This edge does not carry precedence or dependence. It is
+                # transparent and maintains proper layout.
+                device_table\.cu -> rules\.mk: {
+                    style: {
+                        stroke: transparent
+                    }
+                }
+                host_table\.cc: {
+                    # `ncclDevKernelForFunc` maps primary ID to kernel function
+                    # pointer. There are duplicate kernels because not all are
+                    # specilized.
+                    code: |cpp
+                        extern int const ncclDevFuncIdCount = 555;
+                        extern int const ncclDevFuncRowToId[] = {
+                            …
+                        -1};
+
+
+                        __global__ void ncclDevKernel_…(ncclDevKernelArgs4K const);
+
+
+                        extern int const ncclDevKernelCount = 31;
+                        extern void* const ncclDevKernelList[] = {
+                            …
+                        nullptr};
+
+
+                        extern void\* const ncclDevKernelForFunc[] = {
+                            …
+                        };
+
+
+                        extern bool const ncclDevKernelForFuncIsSpecialized[] = {
+                            …
+                        0};
+
+
+                        extern bool const ncclDevKernelForFuncIsSpecialized[] = {
+                            …
+                        0};
+                    | # `ncclDevKernelForFuncIsSpecialized[i]` indicates if
+                      # `ncclDevKernelForFunc[i]` is specilized.
+                    code.style.stroke: transparent
+                }
+                host_table\.cc: {
+                    style: {
+                        stroke: gray
+                        double-border: true
+                        fill: white
+                    }
+                }
+                # This edge does not carry precedence or dependence. It is
+                # transparent and maintains proper layout.
+                host_table\.cc -> device_table\.cu: {
+                    style: {
+                        stroke: transparent
+                    }
+                }
+                rules\.mk: {
+                    compile: |Makefile
+                        LIB_OBJS_GEN = $(patsubst %, $(OBJDIR)/genobj/%.o, ….cu host_table.cc device_table.cu)
+
+                        $(OBJDIR)/genobj/….cu.o: $(OBJDIR)/gensrc $(OBJDIR)/genobj/….cu.d
+                            $(call COMPILE,$@,$(OBJDIR)/gensrc/….cu)
+                    |
+                    compile.style.stroke: transparent
+                }
+                rules\.mk: {
+                    style: {
+                        stroke: gray
+                        double-border: true
+                        fill: white
+                    }
+                }
+                # This edge does not carry precedence or dependence. It is
+                # transparent and maintains proper layout.
+                rules\.mk -> …\.cu: {
+                    style: {
+                        stroke: transparent
+                    }
+                }
+                …\.cu: {
+                    kernel: |cpp
+                        DEFINE_ncclDevFunc(…, …, …, …, …, …)
+                    |
+                    kernel.style.stroke: transparent
+                }
+                …\.cu: {
+                    style: {
+                        stroke: gray
+                        double-border: true
+                        fill: white
+                    }
+                }
+            }
+        }
+    }
+}
+
 # ./
 Makefile: {
     build: |Makefile
@@ -89,6 +212,12 @@ Makefile.style.fill: transparent
 Makefile.device -> device.Makefile.-include: {
     style: {
         stroke: black
+        stroke-dash: 6
+    }
+}
+Makefile.device -> device.Makefile.all: {
+    style: {
+        stroke: black
     }
 }
 # device/
@@ -119,6 +248,23 @@ device: {
                 && ./generate.py $@ "$(ONLY_FUNCS)"
         | # `|` is code delimiter, so `OR` is used instead of `||`.
         py: {tooltip: By default, `ONLY_FUNCS` is not defined. One may specify it as command-line argument along with `make`, which will be passed down recursively with `\$\{MAKE\}`.}
+        all: |Makefile
+            all: $(MANIFEST)
+        |
+        all -> dependence: {
+            style: {
+                stroke: black
+            }
+        }
+        dependence: |Makefile
+            LIB_OBJS = $(patsubst %, $(OBJDIR)/%.o, $(SRCS)) $(LIB_OBJS_GEN)
+            …
+            $(DEVGLUE_OBJ): $(LIB_OBJS)
+                $(NVCC) $(NVCUFLAGS) -dlink $^ -o $@
+
+            $(MANIFEST): $(LIB_OBJS) $(DEVGLUE_OBJ)
+                @echo $^ > $@
+        |
     }
     Makefile.style.stroke: gray
     Makefile.style.fill: white
@@ -174,17 +320,57 @@ device: {
             }
         }
         best_kernel: {tooltip: Every distinct tuple returned will instantiate a specified `ncclDevKernel_…`.}
-        best_kernel -> best: 1
-        best_kernel -> equivalent_primary: 2
         best_kernel -> func_filter: 3
+        best_kernel -> equivalent_primary: 2
+        best_kernel -> best: 1
 
+        name_to_funcs: {tooltip: A disctionary mapping file name to functions.}
         name_to_funcs.style.stroke: black
         name_to_funcs.style.fill: white
 
+        name_to_kernels: {tooltip: A disctionary mapping file name to kernel functions.}
         name_to_kernels.style.stroke: black
         name_to_kernels.style.fill: white
+        # This edge does not carry precedence or dependence. It is transparent
+        # and maintains proper layout.
+        name_to_funcs -> name_to_kernels: {
+            style: {
+                stroke: transparent
+            }
+        }
     }
     commom\.h: {
-        DEFINE_ncclDevKernel
+        DEFINE_ncclDevKernel -> ncclKernelMain
     }
 }
+device.generate\.py.primary_funcs -> \.\..build.obj.device.gensrc.device_table\.cu: paste, required_cuda {
+    style: {
+        stroke: black
+    }
+}
+device.generate\.py.func_rows -> \.\..build.obj.device.gensrc.host_table\.cc: equivalent_primart, paste {
+    style: {
+        stroke: black
+    }
+}
+device.generate\.py.kernel_funcs -> \.\..build.obj.device.gensrc.host_table\.cc: required_cuda, paste {
+    style: {
+        stroke: black
+    }
+}
+device.generate\.py.primary_funcs -> \.\..build.obj.device.gensrc.host_table\.cc: best_kernel, paste, required_cuda {
+    style: {
+        stroke: black
+    }
+}
+device.generate\.py.name_to_funcs -> \.\..build.obj.device.gensrc.rules\.mk: {
+    style: {
+        stroke: black
+    }
+}
+device.generate\.py.name_to_kernels -> \.\..build.obj.device.gensrc.…\.cu: {
+    style: {
+        stroke: black
+    }
+}
+device.Makefile.dependence -> \.\..build.obj.device.gensrc.rules\.mk
