@@ -1,0 +1,470 @@
+api: |cpp
+    int main(int argc, char* argv[])
+    {
+      …
+      //calling NCCL communication API. Group API is required when using
+      //multiple devices per thread/process
+      NCCLCHECK(ncclGroupStart());
+      for (int i=0; i<nDev; i++)
+         NCCLCHECK(ncclAllReduce((const void*)sendbuff[i], (void*)recvbuff[i], size, ncclFloat, ncclSum,
+            comms[i], s[i]));
+      NCCLCHECK(ncclGroupEnd());
+      …
+    }
+|
+api: {tooltip: Example 3 in NCCL doc}
+api: {
+    link: 'https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/examples.html#example-3-multiple-devices-per-thread'
+}
+api -> group\.cc.ncclGroupStart: 1
+api -> collectives\.cc.ncclAllReduce: 2
+api -> group\.cc.ncclGroupEnd: 3
+
+collectives\.cc: {
+    ncclAllReduce: |cpp
+        NCCL_API(ncclResult_t, ncclAllReduce, const void* sendbuff, void* recvbuff, size_t count,
+        ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream);
+        ncclResult_t ncclAllReduce(const void* sendbuff, void* recvbuff, size_t count,
+            ncclDataType_t datatype, ncclRedOp_t op, ncclComm* comm, cudaStream_t stream) {
+            …
+            struct ncclInfo info = { ncclFuncAllReduce, "AllReduce",
+              sendbuff, recvbuff, count, datatype, op, 0, comm, stream, /* Args */
+              ALLREDUCE_CHUNKSTEPS, ALLREDUCE_SLICESTEPS };
+            NCCLCHECK(ncclEnqueueCheck(&info));
+            return ncclSuccess;
+        }
+    |
+}
+group\.cc: {
+    ncclGroupStart: |cpp
+        NCCL_API(ncclResult_t, ncclGroupStart);
+        ncclResult_t ncclGroupStart() {
+          …
+          NCCLCHECK(ncclGroupStartInternal());
+          …
+        }
+    |
+    ncclGroupEnd: |cpp
+        NCCL_API(ncclResult_t, ncclGroupEnd);
+        ncclResult_t ncclGroupEnd() {
+          …
+          NCCLCHECKGOTO(ncclGroupEndInternal(), ret, exit);
+          …
+        }
+    |
+    ncclGroupEnd -> ncclGroupEndInternal
+
+    ncclGroupEndInternal: |cpp
+        __thread struct ncclGroupJob *ncclGroupJobMainPtr = NULL;
+        __thread struct ncclGroupJob ncclGroupJobMain;
+        __thread int ncclGroupBlocking = -1; /* default mode */
+        …
+        ncclResult_t ncclGroupEndInternal(…) {
+          if (ncclGroupDepth == 0) {
+            WARN("ncclGroupEnd: not in a group call.");
+            ret = ncclInvalidUsage;
+            goto exit;
+          }
+
+          if ((--ncclGroupDepth) > 0) goto exit;
+          …
+          if (…) {
+            …
+            ncclGroupJobMainPtr = &ncclGroupJobMain;
+            /* make sure ncclGroupBlocking has been set. */
+            assert(ncclGroupBlocking == 0 OR ncclGroupBlocking == 1);
+            if (ncclGroupBlocking == 0 && …) {
+              /* nonblocking group */
+              …
+              ncclGroupJobMainPtr->base.func = groupLaunchNonBlocking;
+              SYSCHECKGOTO(pthread_create(&ncclGroupJobMainPtr->base.thread, NULL, ncclAsyncJobMain, (void*)&ncclGroupJobMainPtr->base), ret, fail);
+              …
+            } else {
+              /* blocking group */
+              NCCLCHECKGOTO(groupLaunch(&ncclGroupJobMainPtr->base, …), ret, fail);
+              …
+            }
+          }
+        exit:
+          return ret;
+        fail:
+          …
+        }
+    | # `|` is code delimiter, so `OR` is used instead of `||`.
+    ncclGroupEndInternal -> ncclAsyncJobMain: non-blocking {
+        style: {
+            stroke-dash: 6
+        }
+    }
+    ncclGroupEndInternal -> groupLaunch: blocking
+
+    ncclAsyncJobMain: |cpp
+        void* ncclAsyncJobMain(void* arg) {
+          struct ncclAsyncJob* job = (struct ncclAsyncJob*)arg;
+          job->result = job->func(job);
+          …
+        }
+    |
+    ncclAsyncJobMain -> groupLaunchNonBlocking: non-blocking
+
+    groupLaunchNonBlocking: |cpp
+        static ncclResult_t groupLaunchNonBlocking(struct ncclAsyncJob *job_) {
+          return groupLaunch(job_ /* estimatedTime = NULL */);
+        }
+    |
+    groupLaunchNonBlocking -> groupLaunch: non-blocking
+
+    groupLaunch: |cpp
+        static ncclResult_t groupLaunch(struct ncclAsyncJob *job_, …) {
+          …
+          ncclResult_t ret = ncclSuccess;
+          struct ncclGroupJob *gjob = (struct ncclGroupJob*) job_;
+          struct ncclComm *groupCommHeadMain = *gjob->groupCommHeadPtr;
+          …
+          /* Connect channels at runtime if cumem is supported */
+          if (groupCommHeadMain != nullptr) {
+            …
+            do {
+              …
+              NCCLCHECKGOTO(ncclPrepareTasks(comm, algoNeedConnect, &needConnect, simInfo), ret, fail);
+
+              if (…->cuMemSupport && needConnect) {
+                …
+              }
+              …
+            } while(…);
+            …
+          }
+
+          if (… && (groupCommHeadMain != nullptr)) {
+            NCCLCHECKGOTO(doLaunches(groupCommHeadMain), ret, fail);
+          }
+          …
+          exit:
+            return ret;
+          fail:
+            …
+        }
+    |
+    groupLaunch -> doLaunches
+
+    doLaunches: |cpp
+        static ncclResult_t doLaunches(struct ncclComm* head) {
+          ncclResult_t result = ncclSuccess;
+          struct ncclComm* cliqueComm0 = head->intraComm0;
+          struct ncclComm* cliqueHead = head;
+          struct ncclComm* cliqueNextHead;
+          // This outer loop iterates over cliques of comms which are siblings of the
+          // same global entity. We calculate a clique as all comms which have the same
+          // `intraComm0` value.
+          do {
+            struct ncclComm* comm = cliqueHead;
+            …
+            do {
+              …
+              NCCLCHECKGOTO(ncclLaunchPrepare(comm), result, failure);
+              …
+            } while (…);
+            …
+            while (true) { // Iterate rounds of launches for clique.
+              bool moreRounds = false;
+              comm = cliqueHead;
+              do { // Iterate clique numbers
+                …
+                if (moreRounds) {
+                  // Pop next unlaunched kernel
+                  struct ncclKernelPlan* plan = comm->planner.unlaunchedPlansHead;
+                  if (plan != nullptr) {
+                    …
+                    NCCLCHECKGOTO(ncclLaunchKernel(comm, plan), result, failure);
+                  }
+                  …
+                } else {
+                  …
+                }
+                comm = next;
+              } while (comm != cliqueNextHead);
+              if (!moreRounds) break;
+            }
+            cliqueHead = cliqueNextHead;
+          } while (cliqueHead != nullptr);
+        failure:
+          return result;
+        }
+    |
+}
+group\.cc.style.stroke: gray
+group\.cc.style.fill: transparent
+
+group\.cc.ncclGroupStart -> include.group\.h.ncclGroupStartInternal
+
+group\.cc.groupLaunch -> enqueue\.cc.ncclPrepareTasks
+
+group\.cc.doLaunches -> enqueue\.cc.ncclLaunchPrepare
+group\.cc.doLaunches -> enqueue\.cc.ncclLaunchKernel
+
+enqueue\.cc: {
+    ncclPrepareTasks: |cpp
+        // Called once per ncclGroup to organize the user submitted tasks in
+        // comm->planner so that they can be peeled off into plans.
+        ncclResult_t ncclPrepareTasks(struct ncclComm* comm, bool* algoNeedConnect, bool* needConnect, …) {
+          …
+          // Tasks are assembled by (fn,op,ty) size ascending.
+          struct ncclTaskColl* tasksByFnOpTy[ncclNumFuncs*ncclNumDevRedOps*ncclNumTypes];
+          memset(tasksByFnOpTy, 0, sizeof(tasksByFnOpTy));
+          int fnOpTyIndices[ncclNumFuncs*ncclNumDevRedOps*ncclNumTypes];
+          …
+          for (int cursor=0; cursor < fnOpTyCount; cursor++) {
+            struct ncclTaskColl* aggBeg = tasksByFnOpTy[fnOpTyIndices[cursor]];
+            …
+            do {
+              struct ncclTaskColl* aggEnd = aggBeg->next;
+              struct ncclTaskColl agg = *aggBeg;
+              …
+              NCCLCHECK(getAlgoInfo(comm, &agg, collNetSupport, nvlsSupport, nTasksPerChannel, simInfo));
+              agg.devFuncId = ncclDevFuncId(agg.func, agg.opDev.op, agg.datatype, agg.algorithm, agg.protocol);
+              …
+              do {
+                …
+                aggBeg->devFuncId = agg.devFuncId;
+                …
+              } while (aggBeg != aggEnd)
+            } while (aggBeg != nullptr);
+          }
+          …
+        }
+    |
+    ncclLaunchPrepare: |cpp
+        ncclResult_t ncclLaunchPrepare(struct ncclComm* comm) {
+          ncclResult_t result = ncclSuccess;
+          struct ncclKernelPlanner* planner = &comm->planner;
+          …
+          if (planner->nTasksColl + planner->nTasksP2p != 0) {
+            do {
+              …
+              // Drain coll tasks first. This is essential since we partition tasks based
+              // on the work budget and p2p work isn't collective. If we were to drain p2p
+              // first, the place where we cut the kernel could vary by rank which would
+              // cause the "shortest channel first" channel picker to have divergent results.
+              if (planner->nTasksColl != 0) {
+                NCCLCHECKGOTO(scheduleCollTasksToPlan(comm, plan, &budget), result, failure);
+              }
+              // And only drain p2p tasks once colls are depleted.
+              if (planner->nTasksColl == 0 && planner->nTasksP2p != 0) {
+                NCCLCHECKGOTO(scheduleP2pTasksToPlan(comm, plan, &budget), result, failure);
+              }
+              …
+            } while (planner->nTasksColl + planner->nTasksP2p != 0);
+            …
+          }
+        failure:
+          return result;
+        }
+    |
+    ncclLaunchPrepare -> scheduleCollTasksToPlan
+    ncclLaunchPrepare -> scheduleP2pTasksToPlan
+
+    scheduleCollTasksToPlan: |cpp
+        static ncclResult_t scheduleCollTasksToPlan(
+            struct ncclComm* comm, struct ncclKernelPlan* plan, …
+          ) {
+          struct ncclKernelPlanner* planner = &comm->planner;
+          …
+          while (nPlanColls!=0 && !ncclIntruQueueEmpty(&planner->collTaskQueue)) {
+            struct ncclTaskColl* task = ncclIntruQueueHead(&planner->collTaskQueue);
+            …
+            if (!plan->kernelSpecialized) {
+              plan->kernelFn = ncclDevKernelForFunc[task->devFuncId];
+              plan->kernelSpecialized = ncclDevKernelForFuncIsSpecialized[task->devFuncId];
+            }
+            …
+          }
+          return ncclSuccess;
+        }
+    |
+    scheduleP2pTasksToPlan: |cpp
+        static ncclResult_t scheduleP2pTasksToPlan(
+            …
+          ) {
+          …
+          if (!plan->kernelSpecialized) {
+            plan->kernelFn = ncclDevKernelForFunc[ncclDevFuncId_P2p()];
+            plan->kernelSpecialized = ncclDevKernelForFuncIsSpecialized[ncclDevFuncId_P2p()];
+          }
+          …
+        }
+    |
+    ncclLaunchKernel: |cpp
+        ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan) {
+          struct ncclKernelPlanner* planner = &comm->planner;
+          int nChannels = countOneBits(plan->channelMask);
+          void* sym = plan->kernelFn;
+          dim3 grid = {(unsigned)nChannels, 1, 1};
+          dim3 block = {(unsigned)plan->threadPerBlock, 1, 1};
+          int smem = ncclShmemDynamicSize(comm->cudaArch);
+          cudaStream_t launchStream = planner->streams->stream;
+          void* extra[] = {
+            CU_LAUNCH_PARAM_BUFFER_POINTER, plan->kernelArgs,
+            CU_LAUNCH_PARAM_BUFFER_SIZE, &plan->kernelArgsSize,
+            CU_LAUNCH_PARAM_END
+          };
+
+          CUfunction fn;
+          CUDACHECK(cudaGetFuncBySymbol(&fn, sym));
+          
+          ⋕if CUDART_VERSION >= 11080
+          int driverVersion;
+          NCCLCHECK(ncclCudaDriverVersion(&driverVersion));
+          if (driverVersion >= 11080) {
+            …
+            /* Cooperative Group Array (CGA)
+             * On sm90 and later we have an extra level of hierarchy where we
+             * can group together several blocks within the Grid, called
+             * Thread Block Clusters.
+             * Clusters enable multiple thread blocks running concurrently
+             * across multiple SMs to synchronize and collaboratively fetch
+             * and exchange data. A cluster of blocks are guaranteed to be
+             * concurrently scheduled onto a group of SMs.
+             * The maximum value is 8 and it must be divisible into the grid dimensions
+             */
+            …
+          }
+          ⋕endif
+          // Standard kernel launch
+          CUCHECK(cuLaunchKernel(fn, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, launchStream, nullptr, extra));
+          //CUDACHECK(cudaLaunchKernel(fnAddr, grid, block, args, smem, launchStream));
+          return ncclSuccess;
+        }
+    | # `#` may be a special token in D2; using it in code snippet leads to
+      # error, which poses challenges to C syntax, e.g., `#include`, `#if` and
+      # `#endif`, etc. As a turnaround, use `⋕` (Unicode 22D5).
+    ncclLaunchKernel: {tooltip: `cudaGetFuncBySymbol` and `cudaLaunchKernel` are CUDA runtime API.}
+}
+enqueue\.cc.style.stroke: gray
+enqueue\.cc.style.fill: transparent
+
+enqueue\.cc.ncclPrepareTasks -> include.device\.h.ncclDevFuncId
+# include/
+include: {
+    group\.h: {
+        ncclGroupStartInternal: |cpp
+            extern __thread int ncclGroupDepth; // depth of ncclGroupStart nesting
+            …
+            inline ncclResult_t ncclGroupStartInternal() {
+              ncclGroupDepth++;
+              return ncclSuccess;
+            }
+        |
+    }
+    group\.h.style.stroke: gray
+    group\.h.style.fill: white
+    # This edge is meaningless. It is placed here for the sake of formatting.
+    group\.h -> device\.h: {
+        style: {
+            stroke: transparent
+        }
+    }
+    device\.h {
+        ncclDevFuncId: |cpp
+            extern int const ncclDevFuncRowToId[];
+            …
+            inline int ncclDevFuncId(int coll, int devRedOp, int type, int algo, int proto) {
+              …
+              return ncclDevFuncRowToId[row];
+            }
+        |
+    }
+    device\.h.style.stroke: gray
+    device\.h.style.fill: white
+}
+
+# ../build/obj/device/gensrc/
+\.\./build: {
+    near: bottom-center
+
+    obj: {
+        device: {
+            gensrc: {
+                # `#` may be a special token in D2; using it in code snippet
+                # leads to error, which poses challenges to C syntax, e.g.,
+                # `#include`, `#if` and `#endif`, etc. As a turnaround, use `⋕`
+                # (Unicode 22D5) in all snippets in `gensrc/`.
+                host_table\.cc: {
+                    # `ncclDevKernelForFunc` maps primary ID to kernel function
+                    # pointer. There are duplicate kernels because not all are
+                    # specilized.
+                    code: |cpp
+                        ⋕include "device.h"
+
+                        extern int const ncclDevFuncIdCount = 555;
+                        extern int const ncclDevFuncRowToId[] = {
+                            …
+                        -1};
+
+
+                        __global__ void ncclDevKernel_…(ncclDevKernelArgs4K const);
+
+
+                        extern int const ncclDevKernelCount = 31;
+                        extern void* const ncclDevKernelList[] = {
+                            …
+                        nullptr};
+
+
+                        extern void* const ncclDevKernelForFunc[] = {
+                            …
+                        };
+
+
+                        extern bool const ncclDevKernelForFuncIsSpecialized[] = {
+                            …
+                        0};
+                    | # `ncclDevKernelForFuncIsSpecialized[i]` indicates if
+                      # `ncclDevKernelForFunc[i]` is specilized.
+                    code.style.stroke: transparent
+                }
+                host_table\.cc: {
+                    style: {
+                        stroke: gray
+                        fill: white
+                    }
+                }
+                …\.cu: {
+                    kernel: |cpp
+                        ⋕include "common.h"
+                        ⋕include "<op>.h"
+
+                        DEFINE_ncclDevFunc(…, …, …, …, …, …)
+
+                        DEFINE_ncclDevFunc(…, …, …, …, …, …)
+                    |
+                    kernel.style.stroke: transparent
+                }
+                …\.cu: {
+                    style: {
+                        stroke: gray
+                        fill: white
+                    }
+                }
+            }
+        }
+    }
+}
+\.\./build.obj.device.gensrc.host_table\.cc -> include.device\.h.ncclDevFuncId: ncclDevFuncRowToId {
+    style: {
+        stroke: black
+    }
+}
+\.\./build.obj.device.gensrc.host_table\.cc -> enqueue\.cc.scheduleCollTasksToPlan: ncclDevKernelForFunc, ncclDevForFuncIsSpecialized {
+    style: {
+        stroke: black
+    }
+}
+\.\./build.obj.device.gensrc.host_table\.cc -> enqueue\.cc.scheduleP2pTasksToPlan: ncclDevKernelForFunc, ncclDevForFuncIsSpecialized {
+    style: {
+        stroke: black
+    }
+}
+# This edge should have been placed under `enqueue\.cc`. It is placed here
+# instead for the sake of formatting.
+enqueue\.cc.ncclLaunchKernel -> \.\./build.obj.device.gensrc.…\.cu

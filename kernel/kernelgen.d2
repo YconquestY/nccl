@@ -321,18 +321,6 @@ device: {
         name_to_kernels.style.stroke: black
         name_to_kernels.style.fill: white
     }
-    common\.h: {
-        DEFINE_ncclDevKernel -> ncclKernelMain: {
-            style: {
-                stroke-dash: 6
-            }
-        }
-        DEFINE_ncclDevFunc -> RunWorkBatch\:\:run: {
-            style: {
-                stroke-dash: 6
-            }
-        }
-    }
 }
 device.generate\.py.primary_funcs -> \.\./build.obj.device.gensrc.device_table\.cu: required_cuda {
     style: {
@@ -402,7 +390,3 @@ device.Makefile.compile -> \.\./build.obj.device.gensrc.…\.cu: {
         stroke-dash: 6
     }
 }
-# These 2 edgea should have been placed under `\.\./build`. They are placed
-# here instead for the sake of formatting.
-\.\./build.obj.device.gensrc.…\.cu -> device.common\.h.DEFINE_ncclDevKernel
-\.\./build.obj.device.gensrc.…\.cu -> device.common\.h.DEFINE_ncclDevFunc
