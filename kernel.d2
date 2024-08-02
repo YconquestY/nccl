@@ -78,11 +78,6 @@ compile -> \.\./Makefile.src\.%: {
                         extern bool const ncclDevKernelForFuncIsSpecialized[] = {
                             …
                         0};
-
-
-                        extern bool const ncclDevKernelForFuncIsSpecialized[] = {
-                            …
-                        0};
                     | # `ncclDevKernelForFuncIsSpecialized[i]` indicates if
                       # `ncclDevKernelForFunc[i]` is specilized.
                     code.style.stroke: transparent
@@ -115,6 +110,8 @@ compile -> \.\./Makefile.src\.%: {
                 …\.cu: {
                     kernel: |cpp
                         DEFINE_ncclDevFunc(…, …, …, …, …, …)
+
+                        DEFINE_ncclDevFunc(…, …, …, …, …, …)
                     |
                     kernel.style.stroke: transparent
                 }
@@ -145,7 +142,6 @@ compile -> \.\./Makefile.src\.%: {
         }
     }
 }
-
 # ./
 Makefile: {
     build: |Makefile
@@ -246,6 +242,15 @@ device: {
             $(MANIFEST): $(LIB_OBJS) $(DEVGLUE_OBJ)
                 @echo $^ > $@
         |
+        compile: |Makefile
+            COMPILE.cu = $(NVCC) $(NVCUFLAGS) -dc $2 -o $1
+            COMPILE.cc = $(CXX) $(CXXFLAGS) -c $2 -o $1
+            define COMPILE
+            @$(SAY) "Compiling" $2;\
+             mkdir -p $(dir $1);\
+             $(call COMPILE$(suffix $2),$1,$2)
+            endef
+        |
     }
     Makefile.style.stroke: gray
     Makefile.style.fill: white
@@ -305,8 +310,17 @@ device: {
         name_to_kernels.style.stroke: black
         name_to_kernels.style.fill: white
     }
-    commom\.h: {
-        DEFINE_ncclDevKernel -> ncclKernelMain
+    common\.h: {
+        DEFINE_ncclDevKernel -> ncclKernelMain: {
+            style: {
+                stroke-dash: 6
+            }
+        }
+        DEFINE_ncclDevFunc -> RunWorkBatch\:\:run: {
+            style: {
+                stroke-dash: 6
+            }
+        }
     }
 }
 device.generate\.py.primary_funcs -> \.\./build.obj.device.gensrc.device_table\.cu: required_cuda {
@@ -342,10 +356,42 @@ device.generate\.py.name_to_funcs -> \.\./build.obj.device.gensrc.rules\.mk: {
         stroke: black
     }
 }
+device.generate\.py.primary_to_index -> \.\./build.obj.device.gensrc.…\.cu: {
+    style: {
+        stroke: black
+    }
+}
 device.generate\.py.name_to_kernels -> \.\./build.obj.device.gensrc.…\.cu: required_cuda {
     style: {
         stroke: black
     }
 }
-
-device.Makefile.dependence -> \.\./build.obj.device.gensrc.rules\.mk
+device.generate\.py.name_to_funcs -> \.\./build.obj.device.gensrc.…\.cu: {
+    style: {
+        stroke: black
+    }
+}
+device.Makefile.dependence -> \.\./build.obj.device.gensrc.rules\.mk: {
+    style: {
+        stroke: gray
+        stroke-dash: 6
+    }
+}
+# This edge should have been placed under `\.\./build`. It is placed here
+# instead for the sake of formatting.
+\.\./build.obj.device.gensrc.rules\.mk -> device.Makefile.compile: {
+    style: {
+        stroke: gray
+        stroke-dash: 6
+    }
+}
+device.Makefile.compile -> \.\./build.obj.device.gensrc.…\.cu: {
+    style: {
+        stroke: gray
+        stroke-dash: 6
+    }
+}
+# These 2 edgea should have been placed under `\.\./build`. They are placed
+# here instead for the sake of formatting.
+\.\./build.obj.device.gensrc.…\.cu -> device.common\.h.DEFINE_ncclDevKernel
+\.\./build.obj.device.gensrc.…\.cu -> device.common\.h.DEFINE_ncclDevFunc
