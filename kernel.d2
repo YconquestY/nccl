@@ -50,11 +50,17 @@ compile -> \.\./Makefile.src\.%: {
     obj: {
         device: {
             gensrc: {
+                # `#` may be a special token in D2; using it in code snippet
+                # leads to error, which poses challenges to C syntax, e.g.,
+                # `#include`, `#if` and `#endif`, etc. As a turnaround, use `⋕`
+                # (Unicode 22D5) in all snippets in `gensrc/`.
                 host_table\.cc: {
                     # `ncclDevKernelForFunc` maps primary ID to kernel function
                     # pointer. There are duplicate kernels because not all are
                     # specilized.
                     code: |cpp
+                        ⋕include "device.h"
+
                         extern int const ncclDevFuncIdCount = 555;
                         extern int const ncclDevFuncRowToId[] = {
                             …
@@ -70,7 +76,7 @@ compile -> \.\./Makefile.src\.%: {
                         nullptr};
 
 
-                        extern void\* const ncclDevKernelForFunc[] = {
+                        extern void* const ncclDevKernelForFunc[] = {
                             …
                         };
 
@@ -91,6 +97,8 @@ compile -> \.\./Makefile.src\.%: {
                 }
                 device_table\.cu: {
                     code: |cpp
+                        ⋕include "common.h"
+
                         __device__ void ncclDevFunc_…();
 
 
@@ -109,6 +117,9 @@ compile -> \.\./Makefile.src\.%: {
                 }
                 …\.cu: {
                     kernel: |cpp
+                        ⋕include "common.h"
+                        ⋕include "<op>.h"
+
                         DEFINE_ncclDevFunc(…, …, …, …, …, …)
 
                         DEFINE_ncclDevFunc(…, …, …, …, …, …)
