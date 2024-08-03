@@ -224,17 +224,17 @@ device: {
                 stroke: black
             }
         }
-        py: |Makefile
+        py: |||Makefile
             ifeq (1,1)
             # Case if the <gensrc> directory is generated on-demand:
             $(OBJDIR)/gensrc: generate.py
                 @mkdir -p $@
-                (which python3 >/dev/null OR \
+                (which python3 >/dev/null || \
                   (bar='!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'; \
                    printf "\n$${bar}\nERROR: Building NCCL requires a Python 3 installation invokable as 'python3'.\n$${bar}\n\n" 1>&2; \
                    exit 1)) \
                 && ./generate.py $@ "$(ONLY_FUNCS)"
-        | # `|` is code delimiter, so `OR` is used instead of `||`.
+        |||
         py: {tooltip: By default, `ONLY_FUNCS` is not defined. One may specify it as command-line argument along with `make`, which will be passed down recursively with `\$\{MAKE\}`.}
         all: |Makefile
             all: $(MANIFEST)

@@ -54,7 +54,7 @@ group\.cc: {
     |
     ncclGroupEnd -> ncclGroupEndInternal
 
-    ncclGroupEndInternal: |cpp
+    ncclGroupEndInternal: |||cpp
         __thread struct ncclGroupJob *ncclGroupJobMainPtr = NULL;
         __thread struct ncclGroupJob ncclGroupJobMain;
         __thread int ncclGroupBlocking = -1; /* default mode */
@@ -72,7 +72,7 @@ group\.cc: {
             …
             ncclGroupJobMainPtr = &ncclGroupJobMain;
             /* make sure ncclGroupBlocking has been set. */
-            assert(ncclGroupBlocking == 0 OR ncclGroupBlocking == 1);
+            assert(ncclGroupBlocking == 0 || ncclGroupBlocking == 1);
             if (ncclGroupBlocking == 0 && …) {
               /* nonblocking group */
               …
@@ -90,7 +90,7 @@ group\.cc: {
         fail:
           …
         }
-    | # `|` is code delimiter, so `OR` is used instead of `||`.
+    |||
     ncclGroupEndInternal -> ncclAsyncJobMain: non-blocking {
         style: {
             stroke-dash: 6
