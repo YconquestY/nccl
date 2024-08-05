@@ -1,0 +1,104 @@
+ncclDevCommAndChannels: { # 16B alignment
+    shape: class
+
+    struct ncclDevComm: comm
+    struct ncclDevChannel: channels\[MAXCHANNELS\]
+}
+ncclDevCommAndChannels -> ncclDevComm: comm {
+    style: {
+        stroke: black
+        stroke-dash: 6
+    }
+}
+ncclDevCommAndChannels -> ncclDevChannel: channel {
+    style: {
+        stroke: black
+        stroke-dash: 6
+    }
+}
+ncclShmemData {
+    shape: class
+
+    struct ncclDevKernelArgs: args
+    int: channelId
+    struct ncclDevComm: comm # 16B alignment
+    struct ncclDevChannel: channel # 16B alignment
+    uint16_t: funcId
+    …
+}
+ncclShmemData -> ncclDevComm: comm {
+    style: {
+        stroke: black
+        stroke-dash: 6
+    }
+}
+ncclShmemData -> ncclDevChannel: channel {
+    style: {
+        stroke: black
+        stroke-dash: 6
+    }
+}
+ncclShmemData -> ncclDevKernelArgs: args {
+    style: {
+        stroke: black
+        stroke-dash: 6
+    }
+}
+ncclDevComm: { # Why is it not decoratet by `alignas(16)`?
+    shape: class
+    #struct ncclDevChannel\*: channels
+}
+
+ncclDevChannel: { # 16B alignment
+    shape: class
+}
+ncclDevKernelArgs4K: {
+    shape: class
+}
+ncclDevKernelArgs4K <-> ncclDevKernelArgsStorageWrapper: 4 << 10 {
+    style: {
+        stroke: black
+        stroke-dash: 6
+    }
+}
+ncclDevKernelArgsStorageWrapper: {
+    ncclDevKernelArgsStorage: {
+        shape: class
+        struct ncclDevKernelArgs: args
+    }
+    ncclDevKernelArgsStorage': {
+        shape: class
+        ulong2: storage\[capacity/sizeof\(ulong2\)\]
+    }
+}
+ncclDevKernelArgsStorageWrapper.style.opacity: 0
+
+ncclDevKernelArgsStorageWrapper.ncclDevKernelArgsStorage -> ncclDevKernelArgs: args {
+    style: {
+        stroke: black
+        stroke-dash: 6
+    }
+}
+# 16B alignment
+ncclDevKernelArgs {
+    shape: class
+
+    struct ncclDevComm\*: comm
+    uint64_t: channelMask
+    enum ncclDevWorkStorageType: workStorageType
+    uint32_t: workMask
+    void\*: workBuf
+}
+ncclDevKernelArgs -> ncclDevWorkStorageType: workStorageType {
+    style: {
+        stroke: black
+        stroke-dash: 6
+    }
+}
+ncclDevWorkStorageType: {
+    shape: sql_table
+
+    ncclDevWorkStorageTypeArgs: 0
+    ncclDevWorkStorageTypeFifo: 1
+    ncclDevWorkStorageTypePersistent: 2
+}

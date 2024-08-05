@@ -1,0 +1,238 @@
+# device/
+device: {
+    common\.h: {
+        DEFINE: |cpp
+            ⋕define DEFINE_ncclDevKernel(suffix, coll, redop, ty, algo, proto, specializedFnId) \
+              __global__ void ncclDevKernel_⋕⋕suffix(ncclDevKernelArgs4K NCCL_GRID_CONSTANT const args4K) { \
+                ncclKernelMain<specializedFnId, RunWorkBatch<coll, ty, redop<ty>, algo, proto>>(&args4K.args); \
+              }
+
+            ⋕define DEFINE_ncclDevFunc(suffix, coll, redop, ty, algo, proto) \
+              __device__ void ncclDevFunc_⋕⋕suffix() { \
+                RunWorkBatch<coll, ty, redop<ty>, algo, proto>().run(); \
+              }
+        |
+        DEFINE -> ncclKernelMainWrapper
+
+        ncclKernelMainWrapper: {
+            grid-columns: 1
+
+            ncclKernelMain: |cpp
+                template<int SpecializedFnId, typename SpecializedRunWorkBatch>
+                __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* args) {
+                  int tid = threadIdx.x;
+                  int tn = blockDim.x;
+
+                  // Copy kernel args to shmem and then only read those. Otherwise the compiler
+                  // will end up putting the args into thread local stack which is very wasteful.
+                  if (tid < sizeof(ncclDevKernelArgs)/sizeof(uint32_t)) {
+                    ((uint32_t*)&ncclShmem.args)[tid] = ((uint32_t*)args)[tid];
+                  }
+
+                  // To map blockId to channelId, we need the n'th set bit of channelMask which
+                  // is the inverse of counting the number of set bits among the the first n.
+                  // PTX has the fns instruction which does this but is extremely slow. We can
+                  // do better when we know all threads are querying the same bitmask.
+                  if (tid < MAXCHANNELS && (args->channelMask & (1ull<<tid))) {
+                    int n = __popcll(args->channelMask & ((1ull<<tid)-1));
+                    if (blockIdx.x == n) ncclShmem.channelId = tid;
+                  }
+                  __syncthreads(); // publish ncclShmem.{args, channelId}
+                  …
+                }
+            |
+            ncclKernelMain -> ncclKernelMain1: {
+                style: {
+                    stroke-dash: 6
+                    opacity: 0.5
+                }
+            }
+            ncclKernelMain1: |cpp
+                template<int SpecializedFnId, typename SpecializedRunWorkBatch>
+                __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* args) {
+                  int tid = threadIdx.x;
+                  int tn = blockDim.x;
+                  …
+                  // Use first 2 warps to load comm and channel, and reamaining load work batch.
+                  switch (tid/WARP_SIZE) {
+                  case 0:
+                    { void* dst = &ncclShmem.comm;
+                    void* src = ncclShmem.args.comm;
+                    int bytes = sizeof(ncclDevComm);
+                    static_assert(sizeof(ncclDevComm) <= 16*WARP_SIZE, "ncclDevComm cannot be loaded by a single warp in one insn.");
+                    copyToShmem16(tid, dst, src, bytes);
+                    } break;
+                  case 1:
+                    { // Get address of channel without incurring indirect load from ncclDevComm::channels
+                    void* dst = &ncclShmem.channel;
+                    void* src = &((ncclDevCommAndChannels*)ncclShmem.args.comm)->channels[ncclShmem.channelId];
+                    int bytes = sizeof(ncclDevChannel);
+                    static_assert(sizeof(ncclDevChannel) <= 16*WARP_SIZE, "ncclDevChannel cannot be loaded by a single warp in one insn.");
+                    copyToShmem16(tid-WARP_SIZE, dst, src, bytes);
+                    } break;
+                  default:
+                    { int subtid = tid - 2*WARP_SIZE;
+                    int subtn = tn - 2*WARP_SIZE;
+                    loadWorkBatchToShmem(subtid, subtn, args, /*batchIx=*/blockIdx.x);
+                    } break;
+                  }
+                  __syncthreads(); // publish ncclShmem
+                }
+            |
+            ncclKernelMain1 -> ncclKernelMain2: {
+                style: {
+                    stroke-dash: 6
+                    opacity: 0.5
+                }
+            }
+            ncclKernelMain2: |cpp
+                template<int SpecializedFnId, typename SpecializedRunWorkBatch>
+                __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* args) {
+                }
+            |
+            ncclKernelMain2 -> ncclKernelMain3: {
+                style: {
+                    stroke-dash: 6
+                    opacity: 0.5
+                }
+            }
+            ncclKernelMain3: |cpp
+                template<int SpecializedFnId, typename SpecializedRunWorkBatch>
+                __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* args) {
+                }
+            |
+        }
+        ncclKernelMainWrapper.style.opacity: 0
+
+        ncclKernelMainWrapper.ncclKernelMain1 -> utilWrapper.copyToShmem16
+        ncclKernelMainWrapper.ncclKernelMain1 -> utilWrapper.loadWorkBatchToShmem
+        utilWrapper: {
+            grid-columns: 1
+
+            copyToShmem16: |cpp
+                // Copy 16-byte aligned data. You must call with at least `(bytes+15)/16` threads.
+                inline __device__ void copyToShmem16(int tid, void* dst, void const* src, int bytes) {
+                int offset = 16*tid;
+                  if (offset < bytes) {
+                    uint64_t a=0, b=0;
+                    asm("ld.v2.u64 {%0,%1},[%2];" : "=l"(a),"=l"(b) : "l"((char const*)src + offset));
+                    uint32_t udst = (uint32_t)__cvta_generic_to_shared(dst);
+                    asm volatile("st.shared.v2.u64 [%0],{%1,%2};" :: "r"(udst + offset), "l"(a), "l"(b));
+                  }
+                }
+            |
+
+            loadWorkBatchToShmem
+        }
+        utilWrapper.style.opacity: 0
+
+        RunWorkBatch\:\:run
+    }
+    common\.h.style.stroke: gray
+    common\.h.style.fill: white
+}
+# ../build/obj/device/gensrc/
+\.\./build: {
+    obj: {
+        device: {
+            gensrc: {
+                # `#` may be a special token in D2; using it in code snippet
+                # leads to error, which poses challenges to C syntax, e.g.,
+                # `#include`, `#if` and `#endif`, etc. As a turnaround, use `⋕`
+                # (Unicode 22D5) in all snippets in `gensrc/`.
+                host_table\.cc: {
+                    # `ncclDevKernelForFunc` maps primary ID to kernel function
+                    # pointer. There are duplicate kernels because not all are
+                    # specilized.
+                    code: |cpp
+                        ⋕include "device.h"
+
+                        extern int const ncclDevFuncIdCount = 555;
+                        extern int const ncclDevFuncRowToId[] = {
+                            …
+                        -1};
+
+
+                        __global__ void ncclDevKernel_…(ncclDevKernelArgs4K const);
+
+
+                        extern int const ncclDevKernelCount = 31;
+                        extern void* const ncclDevKernelList[] = {
+                            …
+                        nullptr};
+
+
+                        extern void* const ncclDevKernelForFunc[] = {
+                            …
+                        };
+
+
+                        extern bool const ncclDevKernelForFuncIsSpecialized[] = {
+                            …
+                        0};
+                    | # `ncclDevKernelForFuncIsSpecialized[i]` indicates if
+                      # `ncclDevKernelForFunc[i]` is specilized.
+                    code.style.stroke: transparent
+                }
+                host_table\.cc: {
+                    style: {
+                        stroke: gray
+                        fill: white
+                    }
+                }
+                device_table\.cu: {
+                    code: |cpp
+                        ⋕include "common.h"
+
+                        __device__ void ncclDevFunc_…();
+
+
+                        __device__ ncclDevFuncPtr_t const ncclDevFuncTable[] = {
+                            …
+                        nullptr};
+                    |
+                    code.style.stroke: transparent
+                }
+                device_table\.cu: {
+                    style: {
+                        stroke: gray
+                        fill: white
+                    }
+                }
+                …\.cu: {
+                    kernel: |cpp
+                        ⋕include "common.h"
+                        ⋕include "<op>.h"
+
+                        DEFINE_ncclDevFunc(…, …, …, …, …, …)
+
+                        DEFINE_ncclDevFunc(…, …, …, …, …, …)
+                    |
+                    kernel.style.stroke: transparent
+                }
+                …\.cu: {
+                    style: {
+                        stroke: gray
+                        fill: white
+                    }
+                }
+                rules\.mk: {
+                    compile: |Makefile
+                        LIB_OBJS_GEN = $(patsubst %, $(OBJDIR)/genobj/%.o, ….cu host_table.cc device_table.cu)
+
+                        $(OBJDIR)/genobj/….cu.o: $(OBJDIR)/gensrc $(OBJDIR)/genobj/….cu.d
+                            $(call COMPILE,$@,$(OBJDIR)/gensrc/….cu)
+                    |
+                    compile.style.stroke: transparent
+                }
+                rules\.mk: {
+                    style: {
+                        stroke: gray
+                        fill: white
+                    }
+                }
+            }
+        }
+    }
+}
+\.\./build.obj.device.gensrc.…\.cu -> device.common\.h.DEFINE
