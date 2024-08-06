@@ -41,6 +41,7 @@ device: {
                   …
                 }
             |
+            ncclKernelMain.style.stroke: orange
             ncclKernelMain -> ncclKernelMain1: {
                 style: {
                     stroke-dash: 6
@@ -79,6 +80,7 @@ device: {
                   __syncthreads(); // publish ncclShmem
                 }
             |
+            ncclKernelMain1.style.stroke: orange
             ncclKernelMain1 -> ncclKernelMain2: {
                 style: {
                     stroke-dash: 6
@@ -90,6 +92,7 @@ device: {
                 __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* args) {
                 }
             |
+            ncclKernelMain2.style.stroke: orange
             ncclKernelMain2 -> ncclKernelMain3: {
                 style: {
                     stroke-dash: 6
@@ -101,6 +104,7 @@ device: {
                 __device__ __forceinline__ void ncclKernelMain(struct ncclDevKernelArgs const* args) {
                 }
             |
+            ncclKernelMain3.style.stroke: orange
         }
         ncclKernelMainWrapper.style.opacity: 0
 
@@ -121,8 +125,16 @@ device: {
                   }
                 }
             |
+            copyToShmem16.style.stroke: orange
 
-            loadWorkBatchToShmem
+            loadWorkBatchToShmem: |cpp
+                // Must run with at least 64 threads
+                __device__ __forceinline__ void loadWorkBatchToShmem(
+                    …
+                  ) {
+                }
+            |
+            loadWorkBatchToShmem.style.stroke: orange
         }
         utilWrapper.style.opacity: 0
 
